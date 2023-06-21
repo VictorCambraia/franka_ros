@@ -81,6 +81,7 @@ class JointVelocitySide2SideController : public controller_interface::MultiInter
   // I actually think that we dont need to define d_safe here, but okay
   VectorXd d_safe_hmp_;
   double K_error_value_;
+  // Probably not the most correct way of doing the declaration
   JacobianHMP J_hmp_ = JacobianHMP(d_safe_hmp_, K_error_value_);
   MatrixXd poses_human_;
   VectorXd deviation_joints_;

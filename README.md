@@ -5,6 +5,12 @@
 
 See the [Franka Control Interface (FCI) documentation][fci-docs] for more information.
 
+# TODO
+
+Tomorrow I need to implement the callbacks and integrate properly with the other nodes (MAIN thing to do)
+
+Think about more details later
+
 ## License
 
 All packages of `franka_ros` are licensed under the [Apache 2.0 license][apache-2.0].
