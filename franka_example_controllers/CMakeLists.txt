@@ -1,4 +1,6 @@
 cmake_minimum_required(VERSION 3.4)
+include(${CMAKE_CURRENT_SOURCE_DIR}/dqrobotics_dependencies.cmake)
+
 project(franka_example_controllers)
 
 set(CMAKE_BUILD_TYPE Release)
@@ -23,8 +25,10 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   urdf
   visualization_msgs
+  std_msgs
 )
 
+find_package(Threads REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(Franka 0.9.0 QUIET)
 if(NOT Franka_FOUND)
@@ -68,6 +72,7 @@ catkin_package(
     roscpp
     urdf
     visualization_msgs
+    std_msgs
   DEPENDS Franka
 )
 
@@ -77,6 +82,7 @@ add_library(franka_example_controllers
   src/cartesian_velocity_example_controller.cpp
   src/joint_position_example_controller.cpp
   src/joint_velocity_example_controller.cpp
+  src/joint_velocity_side2side_controller.cpp
   src/model_example_controller.cpp
   src/joint_impedance_example_controller.cpp
   src/cartesian_impedance_example_controller.cpp
@@ -98,10 +104,18 @@ target_link_libraries(franka_example_controllers PUBLIC
   ${Franka_LIBRARIES}
   ${catkin_LIBRARIES}
 )
+target_link_libraries(franka_example_controllers PUBLIC
+  pthread
+  dqrobotics
+  dqrobotics-interface-vrep
+  qpOASES
+)
 
 target_include_directories(franka_example_controllers SYSTEM PUBLIC
   ${EIGEN3_INCLUDE_DIRS}
   ${catkin_INCLUDE_DIRS}
+  # Maybe I should add this line below? I dont know
+  # "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 target_include_directories(franka_example_controllers PUBLIC
   include
