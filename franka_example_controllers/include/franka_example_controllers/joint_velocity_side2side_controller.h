@@ -12,6 +12,8 @@
 #include <ros/node_handle.h>
 #include <ros/time.h>
 
+#include "franka_example_controllers/JacobianHMP.h"
+
 #include <dqrobotics/DQ.h>
 #include <dqrobotics/solvers/DQ_QPOASESSolver.h>
 #include <dqrobotics/utils/DQ_Constants.h>
@@ -38,6 +40,8 @@ class JointVelocitySide2SideController : public controller_interface::MultiInter
   std::unique_ptr<franka_hw::FrankaStateHandle> state_handle_;  
   ros::Duration elapsed_time_;
 
+  int stop_robot_;
+
   // Franka Emika Panda serial manipulator
   DQ_SerialManipulatorMDH franka_ = FrankaEmikaPandaRobot::kinematics();
 
@@ -60,6 +64,11 @@ class JointVelocitySide2SideController : public controller_interface::MultiInter
   DQ d_floor_;
   DQ pi_floor_;
 
+  // Define parameters for the VFI
+  // nd = 1;
+  double nd_;
+  double d_safe_floor_;
+
   // Define the pose of the camera
   DQ pose_camera_;
 
@@ -69,6 +78,12 @@ class JointVelocitySide2SideController : public controller_interface::MultiInter
   int decide_td_; //aux variable to choose the td
   DQ td_, td1_, td2_; // the desired position of the robot
 
+  // I actually think that we dont need to define d_safe here, but okay
+  VectorXd d_safe_hmp_;
+  double K_error_value_;
+  JacobianHMP J_hmp_ = JacobianHMP(d_safe_hmp_, K_error_value_);
+  MatrixXd poses_human_;
+  VectorXd deviation_joints_;
 };
 
 }  // namespace franka_example_controllers

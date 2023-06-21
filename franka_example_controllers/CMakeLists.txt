@@ -90,6 +90,7 @@ add_library(franka_example_controllers
   src/dual_arm_cartesian_impedance_example_controller.cpp
   src/teleop_joint_pd_example_controller.cpp
   src/joint_wall.cpp
+  src/JacobianHMP.cpp
 )
 
 add_dependencies(franka_example_controllers
