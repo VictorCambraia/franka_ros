@@ -20,6 +20,10 @@
 #include <dqrobotics/robots/FrankaEmikaPandaRobot.h>
 #include <dqrobotics/robot_control/DQ_ClassicQPController.h>
 
+#include <ros/ros.h>
+#include <std_msgs/String.h>
+#include <std_msgs/Int32.h>
+
 using namespace DQ_robotics;
 using namespace Eigen;
 
@@ -34,12 +38,18 @@ class JointVelocitySide2SideController : public controller_interface::MultiInter
   void starting(const ros::Time&) override;
   void stopping(const ros::Time&) override;
 
+  void cb_update_hmp(const std_msgs::String::ConstPtr& msg);
+  void cb_stop_robot(const std_msgs::Int32::ConstPtr& msg);
+
  private:
   hardware_interface::VelocityJointInterface* velocity_joint_interface_;
   std::vector<hardware_interface::JointHandle> velocity_joint_handles_;
   std::unique_ptr<franka_hw::FrankaStateHandle> state_handle_;  
   ros::Duration elapsed_time_;
 
+  // Previous global variables in the other code
+  std::string str_poses_human_;
+  int refresh_pose_ = 0;
   int stop_robot_;
 
   // Franka Emika Panda serial manipulator
@@ -85,6 +95,15 @@ class JointVelocitySide2SideController : public controller_interface::MultiInter
   JacobianHMP J_hmp_ = JacobianHMP(d_safe_hmp_, K_error_value_);
   MatrixXd poses_human_;
   VectorXd deviation_joints_;
+
+  // Define the subscribers
+  ros::NodeHandle n_pred_;
+  ros::Subscriber sub_prediction_;
+
+  ros::NodeHandle n_stop_;
+  ros::Subscriber sub_stop_robot_;
+
+
 };
 
 }  // namespace franka_example_controllers

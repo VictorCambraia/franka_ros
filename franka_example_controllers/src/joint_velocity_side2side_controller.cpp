@@ -91,11 +91,14 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
   // What variables I have available?
   // From the class I have velocity joint interface_, and velocity joint handles_
   // With this variables I can get: state_interface, with this one I can get state_handle, and with this one the robot joint values
+  
+  // Initialize the previous global variables
+  stop_robot_ = 0;
+  refresh_pose_ = 0;
 
   //------------------- Robot definition--------------------------
   //---------- Franka Emika Panda serial manipulator
   // franka_ = FrankaEmikaPandaRobot::kinematics();
-  stop_robot_ = 0;
 
   DQ franka_pose = 1 + E_*(0.035*k_);
   DQ new_base_robot = (franka_.get_base_frame())*franka_pose*(1+0.5*E_*(-0.07*k_));
@@ -105,7 +108,7 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
 
   // Defined previously in the .h file
   // translation_controller_ = DQ_ClassicQPController(&franka_, &solver_);
-  translation_controller_.set_gain(3);
+  translation_controller_.set_gain(5);
   translation_controller_.set_damping(1);
   translation_controller_.set_control_objective(DQ_robotics::Translation);
 
@@ -141,19 +144,23 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
   d_safe_floor_ = 0.1;
 
   // Define the pose of the camera
-  pose_camera_ = 1 + 0.5*E_*(0*i_ -0.7*j_ + 0*k_);
+  double ang_degree = -90;
+  DQ rotation_camera = cos(ang_degree/2*(pi/180)) + sin(ang_degree/2*(pi/180))*(1*k_);
+  DQ translation_camera = -0.3*i_ -0.35*j_ + 0.28*k_;
+  // pose_camera_ = 1 + 0.5*E_*(0*i_ -0.7*j_ + 0*k_);
+  pose_camera_ = rotation_camera + 0.5*E_*translation_camera*rotation_camera;
 
   // Initialize the variables that we be used later
   tau_ = 0.01; //It works as a delta_t
   counter_ = 0; // count the number of cycles
   decide_td_ = 0; //aux variable to choose the td
-  td1_ =  0.3*i_ + 0.6*j_ + 0.5*k_;
-  td2_ = -0.3*i_ + 0.6*j_ + 0.5*k_; // the desired position of the robot
+  td1_ = 0.6*i_ + 0.3*j_ + 0.4*k_;
+  td2_ = 0.6*i_  -0.3*j_ + 0.4*k_; // the desired position of the robot
   td_ = td1_;
 
   // Define the safety parameters for the human
   d_safe_hmp_ = VectorXd(3);
-  d_safe_hmp_ << 0.05, 0.4, 0.6;
+  d_safe_hmp_ << 0.3, 0.4, 0.6;
 
   //If you want to change the K_error factor from 0.2 to other value, write it here
   double K_error = 0.1;
@@ -169,14 +176,19 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
   poses_human_ = 100*MatrixXd::Ones(n_rows, n_cols);
   deviation_joints_ = VectorXd::Zero(n_rows);
 
-  ROS_INFO_STREAM(" AQUIIII    4  ");
+  // ROS_INFO_STREAM(" AQUIIII    4  ");
+
+  // HERE Initialize the subscribers and publishers(if there is one)
+  sub_prediction_ = n_pred_.subscribe("prediction_human", 1000, &JointVelocitySide2SideController::cb_update_hmp, this);
+  sub_stop_robot_ = n_stop_.subscribe("stop_robot", 1000, &JointVelocitySide2SideController::cb_stop_robot, this);
+
 
   return true;
 }
 
 void JointVelocitySide2SideController::starting(const ros::Time& /* time */) {
   elapsed_time_ = ros::Duration(0.0);
-  ROS_INFO_STREAM(" AQUIIII    5  ");
+  // ROS_INFO_STREAM(" AQUIIII    5  ");
 }
 
 void JointVelocitySide2SideController::update(const ros::Time& /* time */,
@@ -202,6 +214,13 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
   // ------------------ HERE I WILL ADD MY CODE OF UPDATE -----------------------
 
   counter_++;
+
+  if(refresh_pose_ == 1){
+    // Check if this is going to work
+    std::tie(poses_human_, deviation_joints_) = J_hmp_.transform_camera_points_2matrix(str_poses_human_, pose_camera_);
+    refresh_pose_ = 0;
+    // std::cout << "AQUIII 2  " << std::endl;
+  }
 
   // ROS_INFO_STREAM(" AQUIIII    6  ");
 
@@ -244,17 +263,17 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
     // double d_error = pow(d_p_p,2) - pow(d_safe,2);
 
     // std::cout << "AQUI 5  " << std::endl;
-    if(counter_%2000 == 0){
-      // std::cout << "        JOINT NUMERO      " << joint_counter << std::endl;
-      ROS_INFO_STREAM("        JOINT NUMERO      " << joint_counter << "\n");
-    }
+    // if(counter_%2000 == 0){
+    //   // std::cout << "        JOINT NUMERO      " << joint_counter << std::endl;
+    //   ROS_INFO_STREAM("        JOINT NUMERO      " << joint_counter << "\n");
+    // }
 
     // The Jacobian for one or more poses
     MatrixXd Jp_p_aux;
     VectorXd d_error;
     // std::tie(Jp_p_aux, d_error) = J_hmp.get_jacobian_human(franka, Jt,t, points_hmp);
-    std::tie(Jp_p_aux, d_error) = J_hmp_.get_jacobian_human(franka_, Jt,t, poses_human_, deviation_joints_);
-    // std::tie(Jp_p_aux, d_error) = J_hmp_.get_3jacobians_human(franka_, Jt,t, poses_human_, deviation_joints_);
+    // std::tie(Jp_p_aux, d_error) = J_hmp_.get_jacobian_human(franka_, Jt,t, poses_human_, deviation_joints_);
+    std::tie(Jp_p_aux, d_error) = J_hmp_.get_3jacobians_human(franka_, Jt,t, poses_human_, deviation_joints_);
     MatrixXd Jp_p(Jp_p_aux.rows(),n_space);
     Jp_p << Jp_p_aux, MatrixXd::Zero(Jp_p_aux.rows(), n_space-1-joint_counter);
 
@@ -343,31 +362,29 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
   A << A_copy, W_vel;
   b << b_copy, w_vel;
 
-  // ROS_INFO_STREAM(" AQUIIII    9  ");
-  
-  A.resize(W_q.rows() + W_vel.rows(), W_q.cols());
-  b.resize(w_q.size() + w_vel.size());
-
-  A << W_q, W_vel;
-  b << w_q, w_vel;
-
   VectorXd u(n_space);
   // If there is some error/exception, mainly regarding the solver not finding a solution...
   try{
     if(stop_robot_ == 1){
+        if(counter_%4000 == 0){
+          ROS_INFO_STREAM(" STOP THE ROBOTTTT " << u);
+        }
       // u << VectorXd::Zero(n);
       // Probably it shouldn't be a runtime error, but okay. It is just to merge the stop_robt with the solver error 
       throw std::runtime_error("Something is blocking the camera");
     }
     else{
+      // if(counter_%4000 == 0){
+      //   ROS_INFO_STREAM(" A AMTRIX A EH " << A << " \n");
+      // }
       // Update the linear inequalities in the controller
       translation_controller_.set_inequality_constraint(A, b);
       // Get the next control signal [rad/s]
       u << translation_controller_.compute_setpoint_control_signal(q,vec4(td_));  
 
-      if(counter_%2000 == 0){
-        ROS_INFO_STREAM(" I AM HEREEEE   " << u);
-      }
+      // if(counter_%2000 == 0){
+      //   ROS_INFO_STREAM(" I AM HEREEEE   " << u);
+      // }
     } 
   }
   catch(std::exception& e){
@@ -398,6 +415,7 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
   if(e.norm() < 0.05){
     if(decide_td_ == 0){
       td_ = td2_;
+      // td_ = td1_;
       decide_td_ = 1;
     }
     else{
@@ -414,16 +432,33 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
   //   // joint_handle.setCommand(omega);
   //   joint_handle.setCommand(vel);
   // }
-  if(counter_%2000 == 0){
-    ROS_INFO_STREAM(" AQUIIII    10    ");
-    ROS_INFO_STREAM(" Valor de t eh    " << t);
-  }
+  // if((counter_%2000) -1 == 0){
+  //   ROS_INFO_STREAM(" AQUIIII    10    ");
+  //   ROS_INFO_STREAM(" Valor de t eh    " << t);
+  //   ROS_INFO_STREAM(" Valor de r do robo eh   " << rotation(x));
+  //   ROS_INFO_STREAM(" Valor de r da camera eh " << rotation(pose_camera_));
+  // }
 }
 
 void JointVelocitySide2SideController::stopping(const ros::Time& /*time*/) {
   // WARNING: DO NOT SEND ZERO VELOCITIES HERE AS IN CASE OF ABORTING DURING MOTION
   // A JUMP TO ZERO WILL BE COMMANDED PUTTING HIGH LOADS ON THE ROBOT. LET THE DEFAULT
   // BUILT-IN STOPPING BEHAVIOR SLOW DOWN THE ROBOT.
+}
+
+void JointVelocitySide2SideController::cb_update_hmp(const std_msgs::String::ConstPtr& msg){
+    // ROS_INFO("I heard: [%s]", msg->data.c_str());
+    str_poses_human_ = msg->data.c_str();
+    refresh_pose_ = 1;
+    
+    // std::cout << "The size is   " << str_poses_human.length()  << std::endl;
+    // std::cout << str_poses_human.substr(0,100) << std::endl;
+}
+
+void JointVelocitySide2SideController::cb_stop_robot(const std_msgs::Int32::ConstPtr& msg){
+    // ROS_INFO("I heard: [%s]", msg->data.c_str());
+    stop_robot_ = int(msg->data);
+    std::cout << stop_robot_ << std::endl;
 }
 
 }  // namespace franka_example_controllers

@@ -11,6 +11,10 @@ Tomorrow I need to implement the callbacks and integrate properly with the other
 
 Think about more details later
 
+Implement also the acceleration constraint
+
+Get the exception of the y.... in the get_pose_refactor.py
+
 ## License
 
 All packages of `franka_ros` are licensed under the [Apache 2.0 license][apache-2.0].
