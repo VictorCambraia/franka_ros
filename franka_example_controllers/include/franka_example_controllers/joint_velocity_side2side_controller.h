@@ -60,7 +60,7 @@ class JointVelocitySide2SideController : public controller_interface::MultiInter
   // DQ_ClassicQPController translation_controller_ = DQ_ClassicQPController();
 
   DQ_QPOASESSolver solver_stop_;
-  DQ_ClassicQPController pose_controller_ = DQ_ClassicQPController(&franka_, &solver_);
+  DQ_ClassicQPController pose_controller_ = DQ_ClassicQPController(&franka_, &solver_stop_);
 
   // Maybe I could get this values directly from libfranka, but anyway
   VectorXd q_minus_;
@@ -68,6 +68,9 @@ class JointVelocitySide2SideController : public controller_interface::MultiInter
 
   VectorXd vel_minus_;
   VectorXd vel_plus_;
+
+  VectorXd accel_minus_;
+  VectorXd accel_plus_;
 
   // Define the floor
   DQ n_floor_;
@@ -103,6 +106,11 @@ class JointVelocitySide2SideController : public controller_interface::MultiInter
   ros::NodeHandle n_stop_;
   ros::Subscriber sub_stop_robot_;
 
+  // Timers
+  double time_prev_;
+
+  // Delete later
+  int counter_refresh_;
 
 };
 

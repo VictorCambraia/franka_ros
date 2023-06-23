@@ -134,19 +134,27 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
   vel_minus_ << -2.1750, -2.1750, -2.1750, -2.1750, -2.6100, -2.6100, -2.6100;
   vel_plus_ << 2.1750, 2.1750, 2.1750, 2.1750, 2.6100, 2.6100, 2.6100;
 
+  accel_minus_ = VectorXd(7);
+  accel_plus_ = VectorXd(7);
+  // accel_minus_ << -2.1750, -2.1750, -2.1750, -2.1750, -2.6100, -2.6100, -2.6100;
+  // accel_plus_ << 2.1750, 2.1750, 2.1750, 2.1750, 2.6100, 2.6100, 2.6100;
+
+  accel_minus_ << -15, -7.5, -10, -12.5, -15, -20, -20;
+  accel_plus_ << 15, 7.5, 10, 12.5, 15, 20, 20;
+
   ROS_INFO_STREAM(" AQUIIII    3  ");
 
   // Define the floor
   n_floor_ = 1*k_;
   d_floor_ = DQ(0);
   pi_floor_ = n_floor_ + E_*d_floor_;
-  nd_ = 0.4;
+  nd_ = 0.5;
   d_safe_floor_ = 0.1;
 
   // Define the pose of the camera
   double ang_degree = -90;
   DQ rotation_camera = cos(ang_degree/2*(pi/180)) + sin(ang_degree/2*(pi/180))*(1*k_);
-  DQ translation_camera = -0.3*i_ -0.35*j_ + 0.28*k_;
+  DQ translation_camera = -0.35*i_ -0.2*j_ + 0.23*k_;
   // pose_camera_ = 1 + 0.5*E_*(0*i_ -0.7*j_ + 0*k_);
   pose_camera_ = rotation_camera + 0.5*E_*translation_camera*rotation_camera;
 
@@ -154,7 +162,7 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
   tau_ = 0.01; //It works as a delta_t
   counter_ = 0; // count the number of cycles
   decide_td_ = 0; //aux variable to choose the td
-  td1_ = 0.6*i_ + 0.3*j_ + 0.4*k_;
+  td1_ = 0.6*i_ + 0.1*j_ + 0.4*k_;
   td2_ = 0.6*i_  -0.3*j_ + 0.4*k_; // the desired position of the robot
   td_ = td1_;
 
@@ -176,6 +184,7 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
   poses_human_ = 100*MatrixXd::Ones(n_rows, n_cols);
   deviation_joints_ = VectorXd::Zero(n_rows);
 
+  counter_refresh_ = 0;
   // ROS_INFO_STREAM(" AQUIIII    4  ");
 
   // HERE Initialize the subscribers and publishers(if there is one)
@@ -188,6 +197,7 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
 
 void JointVelocitySide2SideController::starting(const ros::Time& /* time */) {
   elapsed_time_ = ros::Duration(0.0);
+  time_prev_ = ros::Time::now().toSec();
   // ROS_INFO_STREAM(" AQUIIII    5  ");
 }
 
@@ -213,14 +223,38 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
 
   // ------------------ HERE I WILL ADD MY CODE OF UPDATE -----------------------
 
+  // ros::Time time_ros;
+  // double time_now, time_diff;
+  // time_now = ros::Time::now().toSec();
+  // time_diff = time_now - time_prev_;
+  // time_prev_ = time_now;
+  // if(counter_%1000 == 0){
+  //   ROS_INFO_STREAM(" o peroiodo foi  " << time_diff*1000 << "  \n");
+  // }
+
   counter_++;
 
   if(refresh_pose_ == 1){
     // Check if this is going to work
-    std::tie(poses_human_, deviation_joints_) = J_hmp_.transform_camera_points_2matrix(str_poses_human_, pose_camera_);
+    counter_refresh_++;
+    // if(counter_refresh_ % 90 == 0){
+    if(counter_refresh_ % 1 == 0){
+      std::tie(poses_human_, deviation_joints_) = J_hmp_.transform_camera_points_2matrix(str_poses_human_, pose_camera_);
+    }
     refresh_pose_ = 0;
     // std::cout << "AQUIII 2  " << std::endl;
   }
+
+  // DELETE LATER THIS LITTLE PART
+  MatrixXd pose_human_single(9,3);
+  VectorXd deviation_joints_single(9);
+
+  for(int j = 0; j < 9; j++){
+    pose_human_single.row(j) << poses_human_.row(j);
+    deviation_joints_single[j] = deviation_joints_[j];
+  }
+  // END OF THE DELETE PART
+
 
   // ROS_INFO_STREAM(" AQUIIII    6  ");
 
@@ -228,11 +262,13 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
   int n_space = franka_.get_dim_configuration_space();
   // ROS_INFO_STREAM(" AQUIIII    7  ");
   VectorXd q(n_space); //joint values
+  VectorXd dq(n_space); //joint velocity values
   franka::RobotState robot_state = state_handle_->getRobotState();
   // Not sure if it is going to work
   // ROS_INFO_STREAM(" AQUIIII    7.5  ");
   for(i=0;i<n_space;i++){
     q[i] = robot_state.q_d[i];
+    dq[i] = robot_state.dq_d[i];
   }
 
   MatrixXd A(0,0);
@@ -244,7 +280,7 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
   // ROS_INFO_STREAM(" AQUIIII    8  ");
   int joint_counter; //aux variable for the for
   // Iterate it for every joint of the robot
-  for(joint_counter = n_space-3; joint_counter<n_space; joint_counter++){
+  for(joint_counter = n_space-1; joint_counter<n_space; joint_counter++){
 
     MatrixXd Jx = franka_.pose_jacobian(q,joint_counter);
 
@@ -273,7 +309,14 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
     VectorXd d_error;
     // std::tie(Jp_p_aux, d_error) = J_hmp.get_jacobian_human(franka, Jt,t, points_hmp);
     // std::tie(Jp_p_aux, d_error) = J_hmp_.get_jacobian_human(franka_, Jt,t, poses_human_, deviation_joints_);
+    // DELETE LATER
+    // std::tie(Jp_p_aux, d_error) = J_hmp_.get_jacobian_human(franka_, Jt,t, pose_human_single, deviation_joints_single); //DELETE LATER
+
+    //UNCOMMENT LATER
     std::tie(Jp_p_aux, d_error) = J_hmp_.get_3jacobians_human(franka_, Jt,t, poses_human_, deviation_joints_);
+
+    // std::tie(Jp_p_aux, d_error) = J_hmp_.get_3jacobians_human(franka_, Jt,t, pose_human_single, deviation_joints_single); //DELETE LATER
+
     MatrixXd Jp_p(Jp_p_aux.rows(),n_space);
     Jp_p << Jp_p_aux, MatrixXd::Zero(Jp_p_aux.rows(), n_space-1-joint_counter);
 
@@ -362,6 +405,28 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
   A << A_copy, W_vel;
   b << b_copy, w_vel;
 
+  // Define the inequalities regarding the max and min acceleration
+  ros::Time time_ros;
+  double time_now, time_diff;
+  time_now = ros::Time::now().toSec();
+  time_diff = time_now - time_prev_;
+  time_prev_ = time_now;
+
+  // MatrixXd W_accel(14,7);
+  // W_accel <<  -1*MatrixXd::Identity(7,7), MatrixXd::Identity(7,7);
+  // VectorXd w_accel(14);
+  // w_accel << -1*(time_diff*accel_minus_ + dq), (time_diff*accel_plus_ + dq);
+
+  // A_copy.resize(A.rows(),A.cols());
+  // A_copy = A;
+  // b_copy.resize(b.size());
+  // b_copy = b;
+
+  // A.resize(A_copy.rows() + W_accel.rows(), A_copy.cols());
+  // b.resize(b_copy.size() + w_accel.size());
+  // A << A_copy, W_accel;
+  // b << b_copy, w_accel;
+
   VectorXd u(n_space);
   // If there is some error/exception, mainly regarding the solver not finding a solution...
   try{
@@ -414,8 +479,8 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
   VectorXd e = vec4(t - td_);
   if(e.norm() < 0.05){
     if(decide_td_ == 0){
-      td_ = td2_;
-      // td_ = td1_;
+      // td_ = td2_;
+      td_ = td1_;
       decide_td_ = 1;
     }
     else{
@@ -438,6 +503,13 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
   //   ROS_INFO_STREAM(" Valor de r do robo eh   " << rotation(x));
   //   ROS_INFO_STREAM(" Valor de r da camera eh " << rotation(pose_camera_));
   // }
+
+  // time_now = ros::Time::now().toSec()*1000;
+  // time_diff = time_now - time_prev;
+  // if(counter_%2000 == 0){
+  //   std::cout << "  \n" << time_diff << "      " << time_now << "   \n";
+  // }  
+                 
 }
 
 void JointVelocitySide2SideController::stopping(const ros::Time& /*time*/) {
