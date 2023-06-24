@@ -22,7 +22,7 @@ joint_velocity_side2side_controller:
         - $(arg arm_id)_joint6
         - $(arg arm_id)_joint7
     # I dont think it did something
-    cutoff_frequency: 1.0
+    # cutoff_frequency: 80.0
 
 joint_position_example_controller:
     type: franka_example_controllers/JointPositionExampleController

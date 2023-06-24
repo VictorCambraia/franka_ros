@@ -112,6 +112,10 @@ class JointVelocitySide2SideController : public controller_interface::MultiInter
   // Delete later
   int counter_refresh_;
 
+  // Filter variables
+  VectorXd dq_filtered_;
+  double K_filter_;
+
 };
 
 }  // namespace franka_example_controllers

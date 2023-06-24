@@ -141,6 +141,8 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
 
   accel_minus_ << -15, -7.5, -10, -12.5, -15, -20, -20;
   accel_plus_ << 15, 7.5, 10, 12.5, 15, 20, 20;
+  // accel_minus_ = -0.1*VectorXd::Ones(7);
+  // accel_plus_ = 0.1*VectorXd::Ones(7);
 
   ROS_INFO_STREAM(" AQUIIII    3  ");
 
@@ -154,7 +156,7 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
   // Define the pose of the camera
   double ang_degree = -90;
   DQ rotation_camera = cos(ang_degree/2*(pi/180)) + sin(ang_degree/2*(pi/180))*(1*k_);
-  DQ translation_camera = -0.35*i_ -0.2*j_ + 0.23*k_;
+  DQ translation_camera = -0.00*i_ -0.25*j_ + 0.28*k_;
   // pose_camera_ = 1 + 0.5*E_*(0*i_ -0.7*j_ + 0*k_);
   pose_camera_ = rotation_camera + 0.5*E_*translation_camera*rotation_camera;
 
@@ -162,7 +164,7 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
   tau_ = 0.01; //It works as a delta_t
   counter_ = 0; // count the number of cycles
   decide_td_ = 0; //aux variable to choose the td
-  td1_ = 0.6*i_ + 0.1*j_ + 0.4*k_;
+  td1_ = 0.9*i_ + 0.1*j_ + 0.3*k_;
   td2_ = 0.6*i_  -0.3*j_ + 0.4*k_; // the desired position of the robot
   td_ = td1_;
 
@@ -185,6 +187,10 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
   deviation_joints_ = VectorXd::Zero(n_rows);
 
   counter_refresh_ = 0;
+
+  // Initialize the variables of the filter
+  dq_filtered_ = VectorXd::Zero(7);
+  K_filter_ = 50;
   // ROS_INFO_STREAM(" AQUIIII    4  ");
 
   // HERE Initialize the subscribers and publishers(if there is one)
@@ -249,7 +255,8 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
   MatrixXd pose_human_single(9,3);
   VectorXd deviation_joints_single(9);
 
-  for(int j = 0; j < 9; j++){
+  int j;
+  for(j = 0; j < 9; j++){
     pose_human_single.row(j) << poses_human_.row(j);
     deviation_joints_single[j] = deviation_joints_[j];
   }
@@ -269,6 +276,7 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
   for(i=0;i<n_space;i++){
     q[i] = robot_state.q_d[i];
     dq[i] = robot_state.dq_d[i];
+    // dq[i] = robot_state.dq[i];
   }
 
   MatrixXd A(0,0);
@@ -439,16 +447,58 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
       throw std::runtime_error("Something is blocking the camera");
     }
     else{
-      // if(counter_%4000 == 0){
-      //   ROS_INFO_STREAM(" A AMTRIX A EH " << A << " \n");
-      // }
+      
       // Update the linear inequalities in the controller
       translation_controller_.set_inequality_constraint(A, b);
       // Get the next control signal [rad/s]
       u << translation_controller_.compute_setpoint_control_signal(q,vec4(td_));  
 
+      // ROS_INFO_STREAM(" CHEGOU AQUI  \n");
+
+      // // Implement Luis idea to scale down the velocity
+      // // It didnt work very well
+      // VectorXd accel(7);
+      // accel = (u - dq)/time_diff;
+
+      // double max_accel = -1000;
+      // double min_accel = +1000;
+      // int i_max_accel, i_min_accel;
+      // double factor=1;
+
+      // for(j=0;j<n_space;j++){
+      //   if(accel[j] > max_accel){
+      //     i_max_accel = j;
+      //     max_accel = accel[j];
+      //   }
+      //   else if(accel[j] < min_accel){
+      //     i_min_accel = j;
+      //     min_accel = accel[j];
+      //   }
+      // }
+
+      // if((max_accel > accel_plus_[i_max_accel]) || (min_accel < accel_minus_[i_min_accel])){
+      //   if(max_accel > -min_accel){
+      //     factor = (time_diff*accel_plus_[i_max_accel] + dq[i_max_accel])/u[i_max_accel];
+      //   }
+      //   else{
+      //     factor = (time_diff*accel_minus_[i_min_accel] + dq[i_min_accel])/u[i_min_accel];
+      //   }
+      // }
+      // // if(counter_%100 == 0){
+      // //   ROS_INFO_STREAM(" O FATOR EH   " << factor <<  " o i_max    " << i_max_accel <<" \n\n" << u << "\n");
+      // // }
+      // u = factor*u;
+      
+      // Pass through the filter
+      dq_filtered_ = u/K_filter_ + (K_filter_ - 1)*dq_filtered_/K_filter_;
+      // dq_filtered_ = u;
+
       // if(counter_%2000 == 0){
       //   ROS_INFO_STREAM(" I AM HEREEEE   " << u);
+      // }
+
+      // if(counter_%100 == 0){
+      //   ROS_INFO_STREAM(" A AMTRIX A EH \n" << u << " \n\n" << dq << "\n");
       // }
     } 
   }
@@ -473,6 +523,8 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
     // Get the next control signal [rad/s]
     // We put as objective the current position, so the robot try to stop
     u << pose_controller_.compute_setpoint_control_signal(q,vec8(x));  
+
+    dq_filtered_ = u/K_filter_ + (K_filter_ - 1)*dq_filtered_/K_filter_;
   }
 
   // Check the error
@@ -490,7 +542,7 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
   }
 
   for(i=0;i<n_space;i++){
-    velocity_joint_handles_[i].setCommand(u[i]);
+    velocity_joint_handles_[i].setCommand(dq_filtered_[i]);
   }
 
   // for (auto joint_handle : velocity_joint_handles_) {
