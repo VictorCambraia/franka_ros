@@ -7,7 +7,8 @@ See the [Franka Control Interface (FCI) documentation][fci-docs] for more inform
 
 # TODO
 
-- Get the exception of the y.... in the get_pose_refactor.py
+- Get the exception of the y.... in the get_pose_refactor.py (DONE, I THINK)
+- Change the d_safe so it includes the std deviation as well. I am not considering it to the final calculation right now...
 - See if the model that I am using right now is more or less trustworthy... Maybe not
 
 ## License
