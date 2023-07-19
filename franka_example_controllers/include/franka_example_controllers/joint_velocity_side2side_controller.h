@@ -111,6 +111,12 @@ class JointVelocitySide2SideController : public controller_interface::MultiInter
 
   // Timers
   double time_prev_;
+  double time_log_;
+
+  // Log variables
+  int log_data_;
+  std::vector<double> vec_d_errors_;
+  std::vector<double> vec_timestamps_;
 
   // Delete later
   int counter_refresh_;

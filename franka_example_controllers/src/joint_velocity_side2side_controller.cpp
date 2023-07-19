@@ -197,6 +197,9 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
   K_filter_ = 50;
   // ROS_INFO_STREAM(" AQUIIII    4  ");
 
+  // Initialize the variables to log the data
+  log_data_ = 0;
+
   // HERE Initialize the subscribers and publishers(if there is one)
   sub_prediction_ = n_pred_.subscribe("prediction_human", 1000, &JointVelocitySide2SideController::cb_update_hmp, this);
   sub_stop_robot_ = n_stop_.subscribe("stop_robot", 1000, &JointVelocitySide2SideController::cb_stop_robot, this);
@@ -292,6 +295,10 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
   VectorXd bp_floor(1);
 
   DQ t, x;
+
+  MatrixXd Jp_p_aux;
+  VectorXd d_error;
+
   // ROS_INFO_STREAM(" AQUIIII    8  ");
   int joint_counter; //aux variable for the for
   // Iterate it for every joint of the robot
@@ -320,8 +327,11 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
     // }
 
     // The Jacobian for one or more poses
-    MatrixXd Jp_p_aux;
-    VectorXd d_error;
+    
+    // The initialization was hereee
+    // MatrixXd Jp_p_aux;
+    // VectorXd d_error;
+
     // std::tie(Jp_p_aux, d_error) = J_hmp.get_jacobian_human(franka, Jt,t, points_hmp);
     // std::tie(Jp_p_aux, d_error) = J_hmp_.get_jacobian_human(franka_, Jt,t, poses_human_, deviation_joints_);
     // DELETE LATER
@@ -482,6 +492,15 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
         VectorXd u_diff = u - u_comp;
         if (u_diff.norm() > 0.05){
           ROS_INFO_STREAM(" FICOU DIFERENTEEEEEE \n\n");
+          if(log_data_ == 0){
+            time_log_ = time_now;
+            log_data_ = 1;
+          }
+        }
+
+        if(log_data_ == 1){
+          vec_d_errors_.push_back(d_error.minCoeff());
+          vec_timestamps_.push_back(time_now-time_log_);
         }
       }
 
@@ -601,6 +620,21 @@ void JointVelocitySide2SideController::stopping(const ros::Time& /*time*/) {
   // WARNING: DO NOT SEND ZERO VELOCITIES HERE AS IN CASE OF ABORTING DURING MOTION
   // A JUMP TO ZERO WILL BE COMMANDED PUTTING HIGH LOADS ON THE ROBOT. LET THE DEFAULT
   // BUILT-IN STOPPING BEHAVIOR SLOW DOWN THE ROBOT.
+  ROS_INFO_STREAM(" HEREEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE"); 
+  ROS_INFO_STREAM("O SIZE DO LOG DATA EH   " << vec_d_errors_.size() << "\n\n");
+
+    // Create and open a text file
+    std::ofstream myfile;
+    myfile.open("/home/geriatronics/victor/Log_Data/example.txt");
+
+    // Write to the file
+    int i;
+    for(i=0; i<vec_d_errors_.size();i++){
+      myfile << vec_d_errors_[i] << "    " << vec_timestamps_[i] << std::endl;
+    }
+
+    // Close the file
+    myfile.close();
 }
 
 void JointVelocitySide2SideController::cb_update_hmp(const std_msgs::String::ConstPtr& msg){
