@@ -112,6 +112,10 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
   translation_controller_.set_damping(1);
   translation_controller_.set_control_objective(DQ_robotics::Translation);
 
+  translation_controller_comp_.set_gain(5);
+  translation_controller_comp_.set_damping(1);
+  translation_controller_comp_.set_control_objective(DQ_robotics::Translation);
+
   // pose_controller_ = DQ_ClassicQPController(&franka_, &solver_stop_);
   pose_controller_.set_gain(1);
   pose_controller_.set_damping(1);
@@ -164,7 +168,7 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
   tau_ = 0.01; //It works as a delta_t
   counter_ = 0; // count the number of cycles
   decide_td_ = 0; //aux variable to choose the td
-  td1_ = 0.9*i_ + 0.1*j_ + 0.3*k_;
+  td1_ = 0.6*i_ + 0.1*j_ + 0.4*k_;
   td2_ = 0.6*i_  -0.3*j_ + 0.4*k_; // the desired position of the robot
   td_ = td1_;
 
@@ -173,7 +177,7 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
   d_safe_hmp_ << 0.3, 0.4, 0.6;
 
   //If you want to change the K_error factor from 0.2 to other value, write it here
-  double K_error = 0.1;
+  double K_error = 0.5;
 
   // Get the object from the class that will return the jacobian for us
   J_hmp_ = JacobianHMP(d_safe_hmp_, K_error);
@@ -219,11 +223,11 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
   // double omega = cycle * omega_max / 2.0 *
   //                (1.0 - std::cos(2.0 * M_PI / time_max.toSec() * elapsed_time_.toSec()));
 
-  //   // COMO QUE DEBUGA ESSA MERDAAAAA
-  //   // aparentemente pode colocar printf sim
-  //   // if(elapsed_time_.sec % 2 == 0){
-  //   //     ROS_INFO_STREAM("O omega eh " << omega);
-  //   // }
+    // // COMO QUE DEBUGA ESSA MERDAAAAA
+    // // aparentemente pode colocar printf sim
+    // // if(elapsed_time_.sec % 2 == 0){
+    // //     ROS_INFO_STREAM("O omega eh " << omega);
+    // // }
     
   //   double vel = 0.01;
 
@@ -283,6 +287,9 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
   VectorXd b(0);
   MatrixXd A_copy(0,0);
   VectorXd b_copy(0);
+
+  MatrixXd Ap_floor(0,0);
+  VectorXd bp_floor(1);
 
   DQ t, x;
   // ROS_INFO_STREAM(" AQUIIII    8  ");
@@ -345,8 +352,9 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
     bp_p << nd_*d_error;
 
     // Define now the inequalities regarding the VFI from the floor
-    MatrixXd Ap_floor = -Jt_pi;
-    VectorXd bp_floor(1);
+    Ap_floor.resize(Jt_pi.rows(), Jt_pi.cols());
+    Ap_floor = -Jt_pi;
+    bp_floor.resize(1);
     bp_floor << nd_*d_error_floor;
 
     //Define the linear inequality matrix and the linear inequality vector
@@ -453,6 +461,31 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
       // Get the next control signal [rad/s]
       u << translation_controller_.compute_setpoint_control_signal(q,vec4(td_));  
 
+      // CHECK HEREEE IF THE VFI TOOK SOME ACTION:
+      // I need to create another solver and solve again the same thing...
+      if(counter_ % 100 == 0){
+        
+        VectorXd u_comp(n_space);
+
+        MatrixXd A_comp(1,1);
+        VectorXd b_comp(1);
+        
+        A_comp.resize(W_q.rows() + W_vel.rows() + Ap_floor.rows(), W_q.cols());
+        b_comp.resize(w_q.size() + w_vel.size() + bp_floor.size());
+
+        A_comp << W_q, W_vel, Ap_floor;
+        b_comp << w_q, w_vel, bp_floor;
+
+        translation_controller_comp_.set_inequality_constraint(A_comp, b_comp);
+        u_comp << translation_controller_comp_.compute_setpoint_control_signal(q,vec4(td_)); 
+
+        VectorXd u_diff = u - u_comp;
+        if (u_diff.norm() > 0.05){
+          ROS_INFO_STREAM(" FICOU DIFERENTEEEEEE \n\n");
+        }
+      }
+
+
       // ROS_INFO_STREAM(" CHEGOU AQUI  \n");
 
       // // Implement Luis idea to scale down the velocity
@@ -511,11 +544,11 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
     MatrixXd A_stop(1,1);
     VectorXd b_stop(1);
     
-    A_stop.resize(W_q.rows() + W_vel.rows(), W_q.cols());
-    b_stop.resize(w_q.size() + w_vel.size());
+    A_stop.resize(W_q.rows() + W_vel.rows() + Ap_floor.rows(), W_q.cols());
+    b_stop.resize(w_q.size() + w_vel.size() + bp_floor.size());
 
-    A_stop << W_q, W_vel;
-    b_stop << w_q, w_vel;
+    A_stop << W_q, W_vel, Ap_floor;
+    b_stop << w_q, w_vel, bp_floor;
 
     // Maybe add the inequality regarding the floor....
     // Update the linear inequalities in the controller

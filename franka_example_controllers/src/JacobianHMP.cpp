@@ -156,7 +156,7 @@ std::tuple<MatrixXd, VectorXd> JacobianHMP::get_jacobian_human(const DQ_SerialMa
         }
     }
 
-    return choose_Jacobian(franka, Jt, t, points_human, i_min);
+    return choose_Jacobian(franka, Jt, t, points_human, deviation_joints, i_min);
 }
 
 std::tuple<MatrixXd, VectorXd> JacobianHMP::get_3jacobians_human(const DQ_SerialManipulatorMDH& franka, const MatrixXd &Jt,const DQ &t,const MatrixXd &points_human, const VectorXd &deviation_joints){
@@ -232,14 +232,14 @@ std::tuple<MatrixXd, VectorXd> JacobianHMP::get_3jacobians_human(const DQ_Serial
     
     // Run 3 times: for the arms, torso, and head
     for(i=0; i<3; i++){
-        std::tie(Jacobian_aux, d_error_aux) = choose_Jacobian(franka, Jt, t, points_human, i_min[i]);
+        std::tie(Jacobian_aux, d_error_aux) = choose_Jacobian(franka, Jt, t, points_human, deviation_joints, i_min[i]);
         Jacobian.row(i) << Jacobian_aux;
         d_error[i] = d_error_aux[0];
     }
     return std::make_tuple(Jacobian, d_error); 
 }
 
-std::tuple<MatrixXd, VectorXd> JacobianHMP::choose_Jacobian(const DQ_SerialManipulatorMDH& franka, const MatrixXd &Jt,const DQ &t,const MatrixXd &points_human, int i_min){
+std::tuple<MatrixXd, VectorXd> JacobianHMP::choose_Jacobian(const DQ_SerialManipulatorMDH& franka, const MatrixXd &Jt,const DQ &t,const MatrixXd &points_human, const VectorXd &deviation_joints, int i_min){
     
     int p_min = i_min%num_joints_per_pose;
     int pose_min = int(i_min/num_joints_per_pose);
@@ -316,6 +316,8 @@ std::tuple<MatrixXd, VectorXd> JacobianHMP::choose_Jacobian(const DQ_SerialManip
 
         d_safe = d_safe_torso;
     }
+
+    d_safe  = d_safe + K_error*deviation_joints[i_min];
     
     // std::cout << "HMP   AQUI 0.5  " << std::endl;
 

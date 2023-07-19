@@ -59,6 +59,9 @@ class JointVelocitySide2SideController : public controller_interface::MultiInter
   DQ_ClassicQPController translation_controller_ = DQ_ClassicQPController(&franka_, &solver_);
   // DQ_ClassicQPController translation_controller_ = DQ_ClassicQPController();
 
+  DQ_QPOASESSolver solver_comp_;
+  DQ_ClassicQPController translation_controller_comp_ = DQ_ClassicQPController(&franka_, &solver_comp_);
+
   DQ_QPOASESSolver solver_stop_;
   DQ_ClassicQPController pose_controller_ = DQ_ClassicQPController(&franka_, &solver_stop_);
 

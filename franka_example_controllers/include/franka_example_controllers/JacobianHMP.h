@@ -45,7 +45,7 @@ public:
     // MatrixXd transform_points_human2matrix(std::string& str_numbers);
     std::tuple<MatrixXd, VectorXd> get_jacobian_human(const DQ_SerialManipulatorMDH& franka, const MatrixXd &Jt,const DQ &t,const MatrixXd &points_human, const VectorXd &deviation_joints);
     std::tuple<MatrixXd, VectorXd> get_3jacobians_human(const DQ_SerialManipulatorMDH& franka, const MatrixXd &Jt,const DQ &t,const MatrixXd &points_human, const VectorXd &deviation_joints);
-    std::tuple<MatrixXd, VectorXd> choose_Jacobian(const DQ_SerialManipulatorMDH& franka, const MatrixXd &Jt,const DQ &t,const MatrixXd &points_human, int i_min);
+    std::tuple<MatrixXd, VectorXd> choose_Jacobian(const DQ_SerialManipulatorMDH& franka, const MatrixXd &Jt,const DQ &t,const MatrixXd &points_human, const VectorXd &deviation_joints, int i_min);
 
     std::tuple<int, DQ> check_get_plane(MatrixXd &points_plane, const DQ &t);
     std::tuple<int, DQ, double> check_get_line(MatrixXd &points_line, const DQ &t);
