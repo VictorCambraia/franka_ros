@@ -155,12 +155,12 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
   d_floor_ = DQ(0);
   pi_floor_ = n_floor_ + E_*d_floor_;
   nd_ = 0.5;
-  d_safe_floor_ = 0.1;
+  d_safe_floor_ = 0.2;
 
   // Define the pose of the camera
   double ang_degree = -90;
   DQ rotation_camera = cos(ang_degree/2*(pi/180)) + sin(ang_degree/2*(pi/180))*(1*k_);
-  DQ translation_camera = -0.00*i_ -0.25*j_ + 0.28*k_;
+  DQ translation_camera = -0.02*i_ -0.25*j_ + 0.45*k_;
   // pose_camera_ = 1 + 0.5*E_*(0*i_ -0.7*j_ + 0*k_);
   pose_camera_ = rotation_camera + 0.5*E_*translation_camera*rotation_camera;
 
@@ -172,17 +172,19 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
   td2_ = 0.6*i_  -0.3*j_ + 0.4*k_; // the desired position of the robot
   td_ = td1_;
 
-  // Define the safety parameters for the human
+  // TESTS AND RESULTS
+  // Define the safety parameters for the human ARM, TORSO, HEAD RESPECTIVELY
   d_safe_hmp_ = VectorXd(3);
-  d_safe_hmp_ << 0.3, 0.4, 0.6;
+  d_safe_hmp_ << 0.1, 0.1, 1.0;
 
   //If you want to change the K_error factor from 0.2 to other value, write it here
-  double K_error = 0.5;
+  // double K_error = 0.5;
+  double K_error = 0.0; //For the No prediction Case
 
   // Get the object from the class that will return the jacobian for us
   J_hmp_ = JacobianHMP(d_safe_hmp_, K_error);
 
-  ROS_INFO_STREAM("O d safe arm ficou sendo  " << J_hmp_.d_safe_arm);
+  ROS_INFO_STREAM("O d safe arm ficou sendo  " << J_hmp_.d_safe_head);
 
   //Initialize the variable that will store the human poses
   int n_rows = J_hmp_.num_poses*J_hmp_.num_joints_per_pose;
@@ -259,6 +261,7 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
   }
 
   // DELETE LATER THIS LITTLE PART
+  // THIS IS ACTUALLY USEFUL FOR GETTING RESULTS
   MatrixXd pose_human_single(9,3);
   VectorXd deviation_joints_single(9);
 
@@ -298,6 +301,7 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
 
   MatrixXd Jp_p_aux;
   VectorXd d_error;
+  VectorXd d_person;
 
   // ROS_INFO_STREAM(" AQUIIII    8  ");
   int joint_counter; //aux variable for the for
@@ -335,10 +339,10 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
     // std::tie(Jp_p_aux, d_error) = J_hmp.get_jacobian_human(franka, Jt,t, points_hmp);
     // std::tie(Jp_p_aux, d_error) = J_hmp_.get_jacobian_human(franka_, Jt,t, poses_human_, deviation_joints_);
     // DELETE LATER
-    // std::tie(Jp_p_aux, d_error) = J_hmp_.get_jacobian_human(franka_, Jt,t, pose_human_single, deviation_joints_single); //DELETE LATER
+    std::tie(Jp_p_aux, d_error, d_person) = J_hmp_.get_jacobian_human(franka_, Jt,t, pose_human_single, deviation_joints_single); //DELETE LATER
 
     //UNCOMMENT LATER
-    std::tie(Jp_p_aux, d_error) = J_hmp_.get_3jacobians_human(franka_, Jt,t, poses_human_, deviation_joints_);
+    // std::tie(Jp_p_aux, d_error, d_person) = J_hmp_.get_3jacobians_human(franka_, Jt,t, poses_human_, deviation_joints_);
 
     // std::tie(Jp_p_aux, d_error) = J_hmp_.get_3jacobians_human(franka_, Jt,t, pose_human_single, deviation_joints_single); //DELETE LATER
 
@@ -473,7 +477,7 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
 
       // CHECK HEREEE IF THE VFI TOOK SOME ACTION:
       // I need to create another solver and solve again the same thing...
-      if(counter_ % 100 == 0){
+      if(counter_ % 1000 == 0){
         
         VectorXd u_comp(n_space);
 
@@ -498,9 +502,31 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
           }
         }
 
+        // if(log_data_ == 1){
+        //   vec_d_errors_.push_back(d_error.minCoeff());
+        //   vec_timestamps_.push_back(time_now-time_log_);
+        // }
         if(log_data_ == 1){
-          vec_d_errors_.push_back(d_error.minCoeff());
+          // double d_min_aux = 100000;
+          // int i_min_aux;
+          // for(i=0; i<3;i++){
+          //   if(d_error[i] < d_min_aux){
+          //     d_min_aux = d_error[i];
+          //     i_min_aux = i;
+          //   }
+          // }
+          // vec_d_errors_.push_back(d_min_aux);
+          // vec_d_person_.push_back(d_person[i_min_aux]);
+          // vec_timestamps_.push_back(time_now-time_log_);
+
+          // ROS_INFO_STREAM(" O VALOR DA DIST EHH     " << d_person[i_min_aux] << "\n\n");
+
+
+          vec_d_errors_.push_back(d_error[0]);
+          vec_d_person_.push_back(d_person[0]);
           vec_timestamps_.push_back(time_now-time_log_);
+
+          ROS_INFO_STREAM(" O VALOR DA DIST EHH     " << d_person[0] << "\n\n");
         }
       }
 
@@ -629,10 +655,23 @@ void JointVelocitySide2SideController::stopping(const ros::Time& /*time*/) {
 
     // Write to the file
     int i;
+
     for(i=0; i<vec_d_errors_.size();i++){
-      myfile << vec_d_errors_[i] << "    " << vec_timestamps_[i] << std::endl;
+      myfile << vec_timestamps_[i] << "," ;
     }
 
+    myfile << std::endl;
+
+    for(i=0; i<vec_d_errors_.size();i++){
+      myfile << vec_d_errors_[i] << ",";
+    }
+
+    myfile << std::endl;
+
+    for(i=0; i<vec_d_errors_.size();i++){
+      myfile << vec_d_person_[i] << ",";
+    }
+    
     // Close the file
     myfile.close();
 }

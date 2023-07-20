@@ -105,7 +105,7 @@ VectorXd JacobianHMP::change_ref_to_lab(VectorXd& point_ref, DQ& pose_ref){
 }
 
 // std::tuple<MatrixXd, VectorXd> 
-std::tuple<MatrixXd, VectorXd> JacobianHMP::get_jacobian_human(const DQ_SerialManipulatorMDH& franka, const MatrixXd &Jt,const DQ &t,const MatrixXd &points_human, const VectorXd &deviation_joints){
+std::tuple<MatrixXd, VectorXd, VectorXd> JacobianHMP::get_jacobian_human(const DQ_SerialManipulatorMDH& franka, const MatrixXd &Jt,const DQ &t,const MatrixXd &points_human, const VectorXd &deviation_joints){
 
     int total_pose;
     int num_points_human = points_human.rows();
@@ -159,7 +159,7 @@ std::tuple<MatrixXd, VectorXd> JacobianHMP::get_jacobian_human(const DQ_SerialMa
     return choose_Jacobian(franka, Jt, t, points_human, deviation_joints, i_min);
 }
 
-std::tuple<MatrixXd, VectorXd> JacobianHMP::get_3jacobians_human(const DQ_SerialManipulatorMDH& franka, const MatrixXd &Jt,const DQ &t,const MatrixXd &points_human, const VectorXd &deviation_joints){
+std::tuple<MatrixXd, VectorXd, VectorXd> JacobianHMP::get_3jacobians_human(const DQ_SerialManipulatorMDH& franka, const MatrixXd &Jt,const DQ &t,const MatrixXd &points_human, const VectorXd &deviation_joints){
 
     int total_pose;
     int num_points_human = points_human.rows();
@@ -226,20 +226,23 @@ std::tuple<MatrixXd, VectorXd> JacobianHMP::get_3jacobians_human(const DQ_Serial
     int dim_space = Jt.cols();
     MatrixXd Jacobian(3,dim_space);
     VectorXd d_error(3);
+    VectorXd d_person(3);
 
     MatrixXd Jacobian_aux;
     VectorXd d_error_aux;
+    VectorXd d_person_aux;
     
     // Run 3 times: for the arms, torso, and head
     for(i=0; i<3; i++){
-        std::tie(Jacobian_aux, d_error_aux) = choose_Jacobian(franka, Jt, t, points_human, deviation_joints, i_min[i]);
+        std::tie(Jacobian_aux, d_error_aux, d_person_aux) = choose_Jacobian(franka, Jt, t, points_human, deviation_joints, i_min[i]);
         Jacobian.row(i) << Jacobian_aux;
         d_error[i] = d_error_aux[0];
+        d_person[i] = d_person_aux[0];
     }
-    return std::make_tuple(Jacobian, d_error); 
+    return std::make_tuple(Jacobian, d_error, d_person); 
 }
 
-std::tuple<MatrixXd, VectorXd> JacobianHMP::choose_Jacobian(const DQ_SerialManipulatorMDH& franka, const MatrixXd &Jt,const DQ &t,const MatrixXd &points_human, const VectorXd &deviation_joints, int i_min){
+std::tuple<MatrixXd, VectorXd, VectorXd> JacobianHMP::choose_Jacobian(const DQ_SerialManipulatorMDH& franka, const MatrixXd &Jt,const DQ &t,const MatrixXd &points_human, const VectorXd &deviation_joints, int i_min){
     
     int p_min = i_min%num_joints_per_pose;
     int pose_min = int(i_min/num_joints_per_pose);
@@ -354,12 +357,16 @@ std::tuple<MatrixXd, VectorXd> JacobianHMP::choose_Jacobian(const DQ_SerialManip
             VectorXd d_error(1);
             d_error << d_error_plane;
             MatrixXd jacobian = franka.point_to_plane_distance_jacobian(Jt, t, plane);
+
+            //CREATING THIS NEW VARIAVLE
+            VectorXd d_person(1);
+            d_person << d_p_plane;
         
             // AQUII DELETE LATER
             if(counter%2000 == 0){
             std::cout << "PLANE" << std::endl;
             }
-            return std::make_tuple(jacobian, d_error);     
+            return std::make_tuple(jacobian, d_error, d_person);     
         }
     }
     
@@ -381,12 +388,16 @@ std::tuple<MatrixXd, VectorXd> JacobianHMP::choose_Jacobian(const DQ_SerialManip
             VectorXd d_error(1);
             d_error << d_error_line;
 
+            //CREATING THIS NEW VARIAVLE
+            VectorXd d_person(1);
+            d_person << d_p_line;
+
             // AQUII DELETE LATER
             if(counter%2000 == 0){
             std::cout << "LINE - 1 AVAILABLE" << std::endl;
             }
 
-            return std::make_tuple(jacobian, d_error);
+            return std::make_tuple(jacobian, d_error, d_person);
         }
     }       
     else if(check_line == 2){
@@ -431,12 +442,16 @@ std::tuple<MatrixXd, VectorXd> JacobianHMP::choose_Jacobian(const DQ_SerialManip
             VectorXd d_error(1);
             d_error << d_error_line;
 
+            //CREATING THIS NEW VARIAVLE
+            VectorXd d_person(1);
+            d_person << d_p_line;
+
             // AQUII DELETE LATER
             if(counter%2000 == 0){
             std::cout << "LINE - 2 AVAILABLE" << std::endl;
             }
 
-            return std::make_tuple(jacobian, d_error);
+            return std::make_tuple(jacobian, d_error, d_person);
         }
     }
     // std::cout << "HMP  AQUI 3  " << std::endl;
@@ -452,11 +467,15 @@ std::tuple<MatrixXd, VectorXd> JacobianHMP::choose_Jacobian(const DQ_SerialManip
     VectorXd d_error(1);
     d_error << d_error_p;
 
+    //CREATING THIS NEW VARIAVLE
+    VectorXd d_person(1);
+    d_person << d_p_p;
+
     // AQUII DELETE LATER
     if(counter%2000 == 0){
         std::cout << "  POINT  " << std::endl;
     }
-    return std::make_tuple(jacobian, d_error);
+    return std::make_tuple(jacobian, d_error, d_person);
 }
 
 std::tuple<int, DQ> JacobianHMP::check_get_plane(MatrixXd &points_plane, const DQ &t){
