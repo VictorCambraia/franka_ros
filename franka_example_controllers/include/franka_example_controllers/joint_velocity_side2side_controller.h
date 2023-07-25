@@ -117,9 +117,14 @@ class JointVelocitySide2SideController : public controller_interface::MultiInter
   int log_data_;
   std::vector<double> vec_d_errors_;
   std::vector<double> vec_d_person_;
+  std::vector<double> vec_d_person2_;
+  std::vector<double> vec_d_person3_;
+  std::vector<double> vec_d_person4_;
   std::vector<double> vec_d_arms_;
   std::vector<double> vec_d_torso_;
   std::vector<double> vec_d_head_;
+  std::vector<double> vec_i_zone_;
+  std::vector<double> vec_vel_joint1_;
   std::vector<double> vec_timestamps_;
 
   // Delete later
