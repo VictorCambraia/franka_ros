@@ -123,6 +123,12 @@ class JointVelocitySide2SideController : public controller_interface::MultiInter
   std::vector<double> vec_d_arms_;
   std::vector<double> vec_d_torso_;
   std::vector<double> vec_d_head_;
+  std::vector<double> vec_d_x_;
+  std::vector<double> vec_d_y_;
+  std::vector<double> vec_d_z_;
+  std::vector<double> vec_head_x_;
+  std::vector<double> vec_head_y_;
+  std::vector<double> vec_head_z_;
   std::vector<double> vec_i_zone_;
   std::vector<double> vec_vel_joint1_;
   std::vector<double> vec_timestamps_;

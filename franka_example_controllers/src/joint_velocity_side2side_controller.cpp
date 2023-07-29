@@ -161,7 +161,8 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
   // Define the pose of the camera
   double ang_degree = -90;
   DQ rotation_camera = cos(ang_degree/2*(pi/180)) + sin(ang_degree/2*(pi/180))*(1*k_);
-  DQ translation_camera = -0.02*i_ -0.23*j_ + 0.53*k_;
+  DQ translation_camera = -0.03*i_ -0.23*j_ + 0.38*k_;
+  // DQ translation_camera = -0.03*i_ -0.23*j_ + 0.40*k_;
   // pose_camera_ = 1 + 0.5*E_*(0*i_ -0.7*j_ + 0*k_);
   pose_camera_ = rotation_camera + 0.5*E_*translation_camera*rotation_camera;
 
@@ -169,14 +170,14 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
   tau_ = 0.01; //It works as a delta_t
   counter_ = 0; // count the number of cycles
   decide_td_ = 0; //aux variable to choose the td
-  td1_ = 0.6*i_ + 0.1*j_ + 0.4*k_;
-  td2_ = 0.6*i_  -0.3*j_ + 0.4*k_; // the desired position of the robot
+  td1_ = 0.6*i_ + 0.5*j_ + 0.4*k_;
+  td2_ = 0.4*i_  -0.5*j_ + 0.4*k_; // the desired position of the robot
   td_ = td1_;
 
   // TESTS AND RESULTS
   // Define the safety parameters for the human ARM, TORSO, HEAD RESPECTIVELY
   d_safe_hmp_ = VectorXd(3);
-  d_safe_hmp_ << 0.6, 0.01, 0.10;
+  d_safe_hmp_ << 0.1, 0.1, 0.62;
   // d_safe_hmp_ << 0.04, 0.05, 0.65;
 
   //If you want to change the K_error factor from 0.2 to other value, write it here
@@ -317,7 +318,7 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
   int joint_counter; //aux variable for the for
   // Iterate it for every joint of the robot
   // for(joint_counter = n_space-1; joint_counter<n_space; joint_counter++){
-  for(joint_counter = n_space-2; joint_counter<n_space; joint_counter++){
+  for(joint_counter = n_space-1; joint_counter<n_space; joint_counter++){
 
     MatrixXd Jx = franka_.pose_jacobian(q,joint_counter);
 
@@ -354,37 +355,37 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
     // std::tie(Jp_p_aux_single, d_error_single, d_person_single) = J_hmp_.get_jacobian_human(franka_, Jt,t, pose_human_single, deviation_joints_single); //DELETE LATER
 
     //UNCOMMENT LATER
-    // std::tie(Jp_p_aux2, d_error2, d_person2) = J_hmp_.get_3jacobians_human(franka_, Jt,t, poses_human_, deviation_joints_);
+    std::tie(Jp_p_aux, d_error, d_person) = J_hmp_.get_3jacobians_human(franka_, Jt,t, poses_human_, deviation_joints_);
 
-    std::tie(Jp_p_aux, d_error, d_person) = J_hmp_.get_3jacobians_human(franka_, Jt,t, pose_human_single, deviation_joints_single); //DELETE LATER
+    // std::tie(Jp_p_aux, d_error, d_person) = J_hmp_.get_3jacobians_human(franka_, Jt,t, pose_human_single, deviation_joints_single); //DELETE LATER
 
     std::tie(Jp_p_aux_single, d_error_single, d_person_single) = J_hmp_.get_3jacobians_human(franka_, Jt,t, pose_human_single, deviation_joints_single); //DELETE LATER
 
-    if(log_data_ == 1 && counter_ % 200 == 0){
+    // if(log_data_ == 1 && counter_ % 200 == 0){
 
-      double d_min_aux = 100000;
-          int i_min_aux;
-          int h;
-          for(h=0; i<3;i++){
-            if(d_error[h] < d_min_aux){
-              d_min_aux = d_error[h];
-              i_min_aux = h;
-            }
-          }
-          if(joint_counter == n_space -1){
-            vec_d_person_.push_back(d_person_single[i_min_aux]);
-          }
-          else if(joint_counter == n_space -2){
-            vec_d_person2_.push_back(d_person_single[i_min_aux]);
-          }
-          else if(joint_counter == n_space -4){
-            vec_d_person3_.push_back(d_person_single[i_min_aux]);
-          }
-          else if(joint_counter == n_space -5){
-            vec_d_person4_.push_back(d_person_single[i_min_aux]);
-          }
+    //   double d_min_aux = 100000;
+    //       int i_min_aux;
+    //       int h;
+    //       for(h=0; i<3;i++){
+    //         if(d_error[h] < d_min_aux){
+    //           d_min_aux = d_error[h];
+    //           i_min_aux = h;
+    //         }
+    //       }
+    //       if(joint_counter == n_space -1){
+    //         vec_d_person_.push_back(d_person_single[i_min_aux]);
+    //       }
+    //       else if(joint_counter == n_space -2){
+    //         vec_d_person2_.push_back(d_person_single[i_min_aux]);
+    //       }
+    //       else if(joint_counter == n_space -4){
+    //         vec_d_person3_.push_back(d_person_single[i_min_aux]);
+    //       }
+    //       else if(joint_counter == n_space -5){
+    //         vec_d_person4_.push_back(d_person_single[i_min_aux]);
+    //       }
           
-    }
+    // }
 
     MatrixXd Jp_p(Jp_p_aux.rows(),n_space);
     Jp_p << Jp_p_aux, MatrixXd::Zero(Jp_p_aux.rows(), n_space-1-joint_counter);
@@ -679,7 +680,7 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
     dq_filtered_ = u/K_filter_ + (K_filter_ - 1)*dq_filtered_/K_filter_;
   }
 
-  if((log_data_ == 1) && (counter_% 200 == 0)){
+  if((log_data_ == 1) && (counter_% 100 == 0)){
       // double d_min_aux = 100000;
       // int i_min_aux;
       // for(i=0; i<3;i++){
@@ -690,8 +691,16 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
       // }
       // vec_d_errors_.push_back(d_min_aux);
       // vec_d_person_.push_back(d_person_single[i_min_aux]);
-      vec_i_zone_.push_back(exception_happended);
-      vec_vel_joint1_.push_back(dq_filtered_[1]);
+      // vec_i_zone_.push_back(exception_happended);
+      vec_d_person_.push_back(d_person_single[0]);
+      vec_d_x_.push_back(vec4(t)[1]);
+      vec_d_y_.push_back(vec4(t)[2]);
+      vec_d_z_.push_back(vec4(t)[3]);
+
+      vec_head_x_.push_back(pose_human_single(2,0));
+      vec_head_y_.push_back(pose_human_single(2,1));
+      vec_head_z_.push_back(pose_human_single(2,2));
+      // vec_vel_joint1_.push_back(dq_filtered_[1]);
       vec_timestamps_.push_back(time_now-time_log_);
 
       ROS_INFO_STREAM(" O VALOR DA DIST EHH     " << d_person_single[0] << "\n\n");
@@ -699,18 +708,21 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
 
   // Check the error
   VectorXd e = vec4(t - td_);
-  if(e.norm() < 0.05){
+  if(e.norm() < 0.03){
 
     
-    if(log_data_ == 0){
+    if(log_data_ == 0 && decide_td_ == 0){
       ROS_INFO_STREAM(" FICOU DIFERENTEEEEEE \n\n");
       time_log_ = time_now;
       log_data_ = 1;
     }
+    else if(log_data_ == 1 && decide_td_ == 1){
+      log_data_ = 0;
+    }
 
     if(decide_td_ == 0){
-      // td_ = td2_;
-      td_ = td1_;
+      td_ = td2_;
+      // td_ = td1_;
       decide_td_ = 1;
     }
     else{
@@ -772,17 +784,17 @@ void JointVelocitySide2SideController::stopping(const ros::Time& /*time*/) {
       myfile << vec_d_person_[i] << ",";
     }
 
-    myfile << std::endl;
+    // myfile << std::endl;
 
-    for(i=0; i<vec_timestamps_.size();i++){
-      myfile << vec_d_person2_[i] << ",";
-    }
+    // for(i=0; i<vec_timestamps_.size();i++){
+    //   myfile << vec_d_person2_[i] << ",";
+    // }
 
-    myfile << std::endl;
+    // myfile << std::endl;
 
-    for(i=0; i<vec_timestamps_.size();i++){
-      myfile << vec_d_person3_[i] << ",";
-    }
+    // for(i=0; i<vec_timestamps_.size();i++){
+    //   myfile << vec_d_person3_[i] << ",";
+    // }
 
     // myfile << std::endl;
 
@@ -790,17 +802,17 @@ void JointVelocitySide2SideController::stopping(const ros::Time& /*time*/) {
     //   myfile << vec_d_person4_[i] << ",";
     // }
 
-    myfile << std::endl;
+    // myfile << std::endl;
 
-    for(i=0; i<vec_timestamps_.size();i++){
-      myfile << vec_vel_joint1_[i] << ",";
-    }
+    // for(i=0; i<vec_timestamps_.size();i++){
+    //   myfile << vec_vel_joint1_[i] << ",";
+    // }
 
-    myfile << std::endl;
+    // myfile << std::endl;
 
-    for(i=0; i<vec_timestamps_.size();i++){
-      myfile << vec_i_zone_[i] << ",";
-    }
+    // for(i=0; i<vec_timestamps_.size();i++){
+    //   myfile << vec_i_zone_[i] << ",";
+    // }
 
     // myfile << std::endl;
 
@@ -819,6 +831,47 @@ void JointVelocitySide2SideController::stopping(const ros::Time& /*time*/) {
     // for(i=0; i<vec_timestamps_.size();i++){
     //   myfile << vec_d_head_[i] << ",";
     // }
+
+    myfile << std::endl;
+
+    for(i=0; i<vec_timestamps_.size();i++){
+      myfile << vec_d_x_[i] << ",";
+    }
+
+        myfile << std::endl;
+
+    for(i=0; i<vec_timestamps_.size();i++){
+      myfile << vec_d_y_[i] << ",";
+    }
+
+    myfile << std::endl;
+
+    for(i=0; i<vec_timestamps_.size();i++){
+      myfile << vec_d_z_[i] << ",";
+    }
+
+        myfile << std::endl;
+
+    for(i=0; i<vec_timestamps_.size();i++){
+      myfile << vec_head_x_[i] << ",";
+    }
+
+        myfile << std::endl;
+
+    for(i=0; i<vec_timestamps_.size();i++){
+      myfile << vec_head_y_[i] << ",";
+    }
+
+    myfile << std::endl;
+
+    for(i=0; i<vec_timestamps_.size();i++){
+      myfile << vec_head_z_[i] << ",";
+    }
+
+
+
+
+
     
     // Close the file
     myfile.close();
