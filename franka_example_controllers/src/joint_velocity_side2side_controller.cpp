@@ -170,14 +170,17 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
   tau_ = 0.01; //It works as a delta_t
   counter_ = 0; // count the number of cycles
   decide_td_ = 0; //aux variable to choose the td
+  // uSED IN THE PICK AND PLACE
   td1_ = 0.6*i_ + 0.5*j_ + 0.4*k_;
+  // USED TO FILM //DELETE LATER  
+  // td1_ = 0.6*i_ + 0.1*j_ + 0.4*k_;
   td2_ = 0.4*i_  -0.5*j_ + 0.4*k_; // the desired position of the robot
   td_ = td1_;
 
   // TESTS AND RESULTS
   // Define the safety parameters for the human ARM, TORSO, HEAD RESPECTIVELY
   d_safe_hmp_ = VectorXd(3);
-  d_safe_hmp_ << 0.1, 0.1, 0.62;
+  d_safe_hmp_ << 0.04, 0.05, 0.62;
   // d_safe_hmp_ << 0.04, 0.05, 0.65;
 
   //If you want to change the K_error factor from 0.2 to other value, write it here
@@ -692,7 +695,7 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
       // vec_d_errors_.push_back(d_min_aux);
       // vec_d_person_.push_back(d_person_single[i_min_aux]);
       // vec_i_zone_.push_back(exception_happended);
-      vec_d_person_.push_back(d_person_single[0]);
+      vec_d_person_.push_back(d_person_single[2]);
       vec_d_x_.push_back(vec4(t)[1]);
       vec_d_y_.push_back(vec4(t)[2]);
       vec_d_z_.push_back(vec4(t)[3]);
@@ -703,7 +706,7 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
       // vec_vel_joint1_.push_back(dq_filtered_[1]);
       vec_timestamps_.push_back(time_now-time_log_);
 
-      ROS_INFO_STREAM(" O VALOR DA DIST EHH     " << d_person_single[0] << "\n\n");
+      ROS_INFO_STREAM(" O VALOR DA DIST EHH     " << d_person_single[2] << "\n\n");
   }
 
   // Check the error
