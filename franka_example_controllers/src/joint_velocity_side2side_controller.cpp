@@ -1,5 +1,5 @@
-// Copyright (c) 2017 Franka Emika GmbH
-// Use of this source code is governed by the Apache-2.0 license, see LICENSE
+// Controller developed by Victor Cambraia N. de Oliveira based on the structure presented by the Franka Emika code
+
 #include <franka_example_controllers/joint_velocity_side2side_controller.h>
 
 #include <cmath>
@@ -85,13 +85,6 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
     return false;
   }
 
-  // ------------------ HERE I WILL ADD MY CODE OF INITIALIZATION -----------------------
-  // I need to check how to get the initial pose....
-
-  // What variables I have available?
-  // From the class I have velocity joint interface_, and velocity joint handles_
-  // With this variables I can get: state_interface, with this one I can get state_handle, and with this one the robot joint values
-  
   // Initialize the previous global variables
   stop_robot_ = 0;
   refresh_pose_ = 0;
@@ -107,7 +100,6 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
   // //---------------------------------------------------------------
 
   // Defined previously in the .h file
-  // translation_controller_ = DQ_ClassicQPController(&franka_, &solver_);
   translation_controller_.set_gain(5);
   translation_controller_.set_damping(1);
   translation_controller_.set_control_objective(DQ_robotics::Translation);
@@ -116,22 +108,14 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
   translation_controller_comp_.set_damping(1);
   translation_controller_comp_.set_control_objective(DQ_robotics::Translation);
 
-  // pose_controller_ = DQ_ClassicQPController(&franka_, &solver_stop_);
   pose_controller_.set_gain(1);
   pose_controller_.set_damping(1);
   pose_controller_.set_control_objective(DQ_robotics::Pose);
-
-  // Maybe I could get this values directly from libfranka, but anyway
-  // HEREEE CHANGES THESE VALUES AND RUN IN THE COPPELIA FIRST
-
-  ROS_INFO_STREAM(" AQUIIII    1  ");
-
+  
   q_minus_ = VectorXd(7);
   q_plus_ = VectorXd(7);
   q_minus_ << -2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973;
   q_plus_ << 2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973;
-
-  ROS_INFO_STREAM(" AQUIIII    2  ");
 
   vel_minus_ = VectorXd(7);
   vel_plus_ = VectorXd(7);
@@ -145,10 +129,8 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
 
   accel_minus_ << -15, -7.5, -10, -12.5, -15, -20, -20;
   accel_plus_ << 15, 7.5, 10, 12.5, 15, 20, 20;
-  // accel_minus_ = -0.1*VectorXd::Ones(7);
-  // accel_plus_ = 0.1*VectorXd::Ones(7);
-
-  ROS_INFO_STREAM(" AQUIIII    3  ");
+  // accel_minus_ = -VectorXd::Ones(7);
+  // accel_plus_ = VectorXd::Ones(7);
 
   // Define the floor
   n_floor_ = 1*k_;
@@ -162,18 +144,15 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
   double ang_degree = -90;
   DQ rotation_camera = cos(ang_degree/2*(pi/180)) + sin(ang_degree/2*(pi/180))*(1*k_);
   DQ translation_camera = -0.03*i_ -0.23*j_ + 0.38*k_;
-  // DQ translation_camera = -0.03*i_ -0.23*j_ + 0.40*k_;
-  // pose_camera_ = 1 + 0.5*E_*(0*i_ -0.7*j_ + 0*k_);
   pose_camera_ = rotation_camera + 0.5*E_*translation_camera*rotation_camera;
 
   // Initialize the variables that we be used later
   tau_ = 0.01; //It works as a delta_t
   counter_ = 0; // count the number of cycles
   decide_td_ = 0; //aux variable to choose the td
-  // uSED IN THE PICK AND PLACE
+
+  // Desired positions of the manipulator
   td1_ = 0.6*i_ + 0.5*j_ + 0.4*k_;
-  // USED TO FILM //DELETE LATER  
-  // td1_ = 0.6*i_ + 0.1*j_ + 0.4*k_;
   td2_ = 0.4*i_  -0.5*j_ + 0.4*k_; // the desired position of the robot
   td_ = td1_;
 
@@ -190,8 +169,6 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
   // Get the object from the class that will return the jacobian for us
   J_hmp_ = JacobianHMP(d_safe_hmp_, K_error);
 
-  ROS_INFO_STREAM("O d safe arm ficou sendo  " << J_hmp_.d_safe_head);
-
   //Initialize the variable that will store the human poses
   int n_rows = J_hmp_.num_poses*J_hmp_.num_joints_per_pose;
   int n_cols = J_hmp_.num_dim;
@@ -203,7 +180,6 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
   // Initialize the variables of the filter
   dq_filtered_ = VectorXd::Zero(7);
   K_filter_ = 50;
-  // ROS_INFO_STREAM(" AQUIIII    4  ");
 
   // Initialize the variables to log the data
   log_data_ = 0;
@@ -212,87 +188,48 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
   sub_prediction_ = n_pred_.subscribe("prediction_human", 1000, &JointVelocitySide2SideController::cb_update_hmp, this);
   sub_stop_robot_ = n_stop_.subscribe("stop_robot", 1000, &JointVelocitySide2SideController::cb_stop_robot, this);
 
-
   return true;
 }
 
 void JointVelocitySide2SideController::starting(const ros::Time& /* time */) {
   elapsed_time_ = ros::Duration(0.0);
   time_prev_ = ros::Time::now().toSec();
-  // ROS_INFO_STREAM(" AQUIIII    5  ");
 }
 
 void JointVelocitySide2SideController::update(const ros::Time& /* time */,
                                             const ros::Duration& period) {
   elapsed_time_ += period;
 
-  // ros::Duration time_max(8.0);
-  // double omega_max = 0.1;
-  // double cycle = std::floor(
-  //     std::pow(-1.0, (elapsed_time_.toSec() - std::fmod(elapsed_time_.toSec(), time_max.toSec())) /
-  //                        time_max.toSec()));
-  // double omega = cycle * omega_max / 2.0 *
-  //                (1.0 - std::cos(2.0 * M_PI / time_max.toSec() * elapsed_time_.toSec()));
-
-    // // COMO QUE DEBUGA ESSA MERDAAAAA
-    // // aparentemente pode colocar printf sim
-    // // if(elapsed_time_.sec % 2 == 0){
-    // //     ROS_INFO_STREAM("O omega eh " << omega);
-    // // }
-    
-  //   double vel = 0.01;
-
   // ------------------ HERE I WILL ADD MY CODE OF UPDATE -----------------------
-
-  // ros::Time time_ros;
-  // double time_now, time_diff;
-  // time_now = ros::Time::now().toSec();
-  // time_diff = time_now - time_prev_;
-  // time_prev_ = time_now;
-  // if(counter_%1000 == 0){
-  //   ROS_INFO_STREAM(" o peroiodo foi  " << time_diff*1000 << "  \n");
-  // }
 
   counter_++;
 
   if(refresh_pose_ == 1){
-    // Check if this is going to work
     counter_refresh_++;
-    // if(counter_refresh_ % 90 == 0){
     if(counter_refresh_ % 1 == 0){
       std::tie(poses_human_, deviation_joints_) = J_hmp_.transform_camera_points_2matrix(str_poses_human_, pose_camera_);
     }
     refresh_pose_ = 0;
-    // std::cout << "AQUIII 2  " << std::endl;
   }
 
-  // DELETE LATER THIS LITTLE PART
   // THIS IS ACTUALLY USEFUL FOR GETTING RESULTS
   MatrixXd pose_human_single(9,3);
   VectorXd deviation_joints_single(9);
-
   int j;
   for(j = 0; j < 9; j++){
     pose_human_single.row(j) << poses_human_.row(j);
     deviation_joints_single[j] = deviation_joints_[j];
   }
-  // END OF THE DELETE PART
-
-
-  // ROS_INFO_STREAM(" AQUIIII    6  ");
 
   int i;
   int n_space = franka_.get_dim_configuration_space();
-  // ROS_INFO_STREAM(" AQUIIII    7  ");
   VectorXd q(n_space); //joint values
   VectorXd dq(n_space); //joint velocity values
   franka::RobotState robot_state = state_handle_->getRobotState();
-  // Not sure if it is going to work
-  // ROS_INFO_STREAM(" AQUIIII    7.5  ");
+
   for(i=0;i<n_space;i++){
     q[i] = robot_state.q_d[i];
     dq[i] = robot_state.dq_d[i];
-    // dq[i] = robot_state.dq[i];
   }
   
   MatrixXd A(0,0);
@@ -317,10 +254,8 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
   VectorXd d_error_single;
   VectorXd d_person_single;
 
-  // ROS_INFO_STREAM(" AQUIIII    8  ");
   int joint_counter; //aux variable for the for
   // Iterate it for every joint of the robot
-  // for(joint_counter = n_space-1; joint_counter<n_space; joint_counter++){
   for(joint_counter = n_space-1; joint_counter<n_space; joint_counter++){
 
     MatrixXd Jx = franka_.pose_jacobian(q,joint_counter);
@@ -330,76 +265,19 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
     // Get the robot's translation Jacobian
     MatrixXd Jt = franka_.translation_jacobian(Jx, x);
 
-    // // Get the distance Jacobian from the cube/sphere (Lets see if it works without defining the size)
-    // MatrixXd Jp_p(1, n);
-    // Jp_p << franka.point_to_point_distance_jacobian(Jt, t, p_sphere), MatrixXd::Zero(1, n-1-joint_counter);
-    // // Jp_p << franka.point_to_point_distance_jacobian(Jt, t, p_sphere);
-
-    // // Get the distance to the sphere 
-    // double d_p_p = double(norm(t-p_sphere));
-    // double d_error = pow(d_p_p,2) - pow(d_safe,2);
-
-    // std::cout << "AQUI 5  " << std::endl;
-    // if(counter_%2000 == 0){
-    //   // std::cout << "        JOINT NUMERO      " << joint_counter << std::endl;
-    //   ROS_INFO_STREAM("        JOINT NUMERO      " << joint_counter << "\n");
-    // }
-
     // The Jacobian for one or more poses
-    
-    // The initialization was hereee
-    // MatrixXd Jp_p_aux;
-    // VectorXd d_error;
 
-    // std::tie(Jp_p_aux, d_error) = J_hmp.get_jacobian_human(franka, Jt,t, points_hmp);
-    // std::tie(Jp_p_aux, d_error) = J_hmp_.get_jacobian_human(franka_, Jt,t, poses_human_, deviation_joints_);
-    // DELETE LATER
-    // std::tie(Jp_p_aux, d_error, d_person) = J_hmp_.get_jacobian_human(franka_, Jt,t, pose_human_single, deviation_joints_single); //DELETE LATER
-    // std::tie(Jp_p_aux_single, d_error_single, d_person_single) = J_hmp_.get_jacobian_human(franka_, Jt,t, pose_human_single, deviation_joints_single); //DELETE LATER
-
-    //UNCOMMENT LATER
     std::tie(Jp_p_aux, d_error, d_person) = J_hmp_.get_3jacobians_human(franka_, Jt,t, poses_human_, deviation_joints_);
-
-    // std::tie(Jp_p_aux, d_error, d_person) = J_hmp_.get_3jacobians_human(franka_, Jt,t, pose_human_single, deviation_joints_single); //DELETE LATER
-
-    std::tie(Jp_p_aux_single, d_error_single, d_person_single) = J_hmp_.get_3jacobians_human(franka_, Jt,t, pose_human_single, deviation_joints_single); //DELETE LATER
-
-    // if(log_data_ == 1 && counter_ % 200 == 0){
-
-    //   double d_min_aux = 100000;
-    //       int i_min_aux;
-    //       int h;
-    //       for(h=0; i<3;i++){
-    //         if(d_error[h] < d_min_aux){
-    //           d_min_aux = d_error[h];
-    //           i_min_aux = h;
-    //         }
-    //       }
-    //       if(joint_counter == n_space -1){
-    //         vec_d_person_.push_back(d_person_single[i_min_aux]);
-    //       }
-    //       else if(joint_counter == n_space -2){
-    //         vec_d_person2_.push_back(d_person_single[i_min_aux]);
-    //       }
-    //       else if(joint_counter == n_space -4){
-    //         vec_d_person3_.push_back(d_person_single[i_min_aux]);
-    //       }
-    //       else if(joint_counter == n_space -5){
-    //         vec_d_person4_.push_back(d_person_single[i_min_aux]);
-    //       }
-          
-    // }
+    // FOR DEBUGGING AND LOGGING PURPOSES
+    std::tie(Jp_p_aux_single, d_error_single, d_person_single) = J_hmp_.get_3jacobians_human(franka_, Jt,t, pose_human_single, deviation_joints_single);
 
     MatrixXd Jp_p(Jp_p_aux.rows(),n_space);
     Jp_p << Jp_p_aux, MatrixXd::Zero(Jp_p_aux.rows(), n_space-1-joint_counter);
-
-    // std::cout << "AQUI 5.5  " << std::endl;
-
+    
     // Get the distance Jacobian to the floor
     MatrixXd Jt_pi(1,n_space);
     Jt_pi << franka_.point_to_plane_distance_jacobian(Jt, t, pi_floor_), MatrixXd::Zero(1, n_space-1-joint_counter);
 
-    
     // Get the distance to the floor 
     double d_p_floor = double(dot(t,n_floor_)-d_floor_);
     double d_error_floor = d_p_floor - d_safe_floor_;   
@@ -451,8 +329,6 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
   VectorXd w_q(14);
   w_q << -1*(q_minus_ - q), 1*(q_plus_ - q);
 
-  // Maybe there is a better way to do this, but I dont know
-  // I could also create a function to do that in a simpler way
   A_copy.resize(A.rows(),A.cols());
   A_copy = A;
   b_copy.resize(b.size());
@@ -479,6 +355,7 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
   A << A_copy, W_vel;
   b << b_copy, w_vel;
 
+  // IN THE END WE DID NOT USE THE ACCELERATION CONSTRAINTS, BUT HERE IT IS
   // Define the inequalities regarding the max and min acceleration
   ros::Time time_ros;
   double time_now, time_diff;
@@ -508,158 +385,21 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
   // If there is some error/exception, mainly regarding the solver not finding a solution...
   try{
     if(stop_robot_ == 1){
-        if(counter_%4000 == 0){
-          ROS_INFO_STREAM(" STOP THE ROBOTTTT " << u);
-        }
-      // u << VectorXd::Zero(n);
       // Probably it shouldn't be a runtime error, but okay. It is just to merge the stop_robt with the solver error 
       throw std::runtime_error("Something is blocking the camera");
     }
     else{
-      
       // Update the linear inequalities in the controller
       translation_controller_.set_inequality_constraint(A, b);
       // Get the next control signal [rad/s]
       u << translation_controller_.compute_setpoint_control_signal(q,vec4(td_));  
-
-      // CHECK HEREEE IF THE VFI TOOK SOME ACTION:
-      // I need to create another solver and solve again the same thing...
-      if(counter_ % 200 == 0){
-        
-        // VectorXd u_comp(n_space);
-
-        // MatrixXd A_comp(1,1);
-        // VectorXd b_comp(1);
-        
-        // A_comp.resize(W_q.rows() + W_vel.rows() + Ap_floor.rows(), W_q.cols());
-        // b_comp.resize(w_q.size() + w_vel.size() + bp_floor.size());
-
-        // A_comp << W_q, W_vel, Ap_floor;
-        // b_comp << w_q, w_vel, bp_floor;
-
-        // translation_controller_comp_.set_inequality_constraint(A_comp, b_comp);
-        // u_comp << translation_controller_comp_.compute_setpoint_control_signal(q,vec4(td_)); 
-
-        // VectorXd u_diff = u - u_comp;
-        // if (u_diff.norm() > 0.05){
-        //   ROS_INFO_STREAM(" FICOU DIFERENTEEEEEE \n\n");
-        //   if(log_data_ == 0){
-        //     time_log_ = time_now;
-        //     log_data_ = 1;
-        //   }
-        // }
-
-        // if(log_data_ == 1){
-        //   vec_d_errors_.push_back(d_error.minCoeff());
-        //   vec_timestamps_.push_back(time_now-time_log_);
-        // }
-
-
-        if(log_data_ == 1){
-          // double d_min_aux = 100000;
-          // int i_min_aux;
-          // for(i=0; i<3;i++){
-          //   if(d_error[i] < d_min_aux){
-          //     d_min_aux = d_error[i];
-          //     i_min_aux = i;
-          //   }
-          // }
-          // vec_d_errors_.push_back(d_min_aux);
-          // vec_d_person_.push_back(d_person_single[i_min_aux]);
-          // vec_vel_joint1_.push_back(u[0]);
-          // vec_timestamps_.push_back(time_now-time_log_);
-
-          // ROS_INFO_STREAM(" O VALOR DA DIST EHH     " << d_person_single[0] << "\n\n");
-
-          // IF I WANT TO GET ALL AT THE SAME TIME
-
-          // vec_d_arms_.push_back(d_person_single[0]);
-          // vec_d_torso_.push_back(d_person_single[1]);
-          // vec_d_head_.push_back(d_person_single[2]);
-          // vec_timestamps_.push_back(time_now-time_log_);
-
-          // ROS_INFO_STREAM(" O VALOR DA DIST EHH     " << d_person_single[0] << "\n\n");
-
-
-          // vec_d_errors_.push_back(d_error[0]);
-          // vec_d_person_.push_back(d_person[0]);
-          // vec_timestamps_.push_back(time_now-time_log_);
-
-          // ROS_INFO_STREAM(" O VALOR DA DIST EHH     " << d_person[0] << "\n\n");
-
-
-          // double d_min_aux = 100000;
-          // int i_min_aux;
-          // for(i=0; i<3;i++){
-          //   if(d_error2[i] < d_min_aux){
-          //     d_min_aux = d_error2[i];
-          //     i_min_aux = i;
-          //   }
-          // }
-
-          // vec_i_zone_.push_back(i_min_aux);
-          // vec_d_person_.push_back(d_person[0]);
-          // vec_timestamps_.push_back(time_now-time_log_);
-
-          // ROS_INFO_STREAM(" O VALOR DA DIST EHH     " << d_person[0] << "\n\n");
-
-        }
-      }
-
-
-      // ROS_INFO_STREAM(" CHEGOU AQUI  \n");
-
-      // // Implement Luis idea to scale down the velocity
-      // // It didnt work very well
-      // VectorXd accel(7);
-      // accel = (u - dq)/time_diff;
-
-      // double max_accel = -1000;
-      // double min_accel = +1000;
-      // int i_max_accel, i_min_accel;
-      // double factor=1;
-
-      // for(j=0;j<n_space;j++){
-      //   if(accel[j] > max_accel){
-      //     i_max_accel = j;
-      //     max_accel = accel[j];
-      //   }
-      //   else if(accel[j] < min_accel){
-      //     i_min_accel = j;
-      //     min_accel = accel[j];
-      //   }
-      // }
-
-      // if((max_accel > accel_plus_[i_max_accel]) || (min_accel < accel_minus_[i_min_accel])){
-      //   if(max_accel > -min_accel){
-      //     factor = (time_diff*accel_plus_[i_max_accel] + dq[i_max_accel])/u[i_max_accel];
-      //   }
-      //   else{
-      //     factor = (time_diff*accel_minus_[i_min_accel] + dq[i_min_accel])/u[i_min_accel];
-      //   }
-      // }
-      // // if(counter_%100 == 0){
-      // //   ROS_INFO_STREAM(" O FATOR EH   " << factor <<  " o i_max    " << i_max_accel <<" \n\n" << u << "\n");
-      // // }
-      // u = factor*u;
       
       // Pass through the filter
       dq_filtered_ = u/K_filter_ + (K_filter_ - 1)*dq_filtered_/K_filter_;
-      // dq_filtered_ = u;
-
-      // if(counter_%2000 == 0){
-      //   ROS_INFO_STREAM(" I AM HEREEEE   " << u);
-      // }
-
-      // if(counter_%100 == 0){
-      //   ROS_INFO_STREAM(" A AMTRIX A EH \n" << u << " \n\n" << dq << "\n");
-      // }
     } 
   }
   catch(std::exception& e){
     exception_happended = 1;
-    // std::cout << e.what() << std::endl;
-    // std::cout << "HEREEEE \n\n HEREEEEE '\n\n" << std::endl;
     if(counter_ % 200 == 0){
       ROS_INFO_STREAM("             " << e.what() << "\n");
     }
@@ -673,8 +413,6 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
     A_stop << W_q, W_vel, Ap_floor;
     b_stop << w_q, w_vel, bp_floor;
 
-    // Maybe add the inequality regarding the floor....
-    // Update the linear inequalities in the controller
     pose_controller_.set_inequality_constraint(A_stop, b_stop);
     // Get the next control signal [rad/s]
     // We put as objective the current position, so the robot try to stop
@@ -683,49 +421,35 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
     dq_filtered_ = u/K_filter_ + (K_filter_ - 1)*dq_filtered_/K_filter_;
   }
 
-  if((log_data_ == 1) && (counter_% 100 == 0)){
-      // double d_min_aux = 100000;
-      // int i_min_aux;
-      // for(i=0; i<3;i++){
-      //   if(d_error[i] < d_min_aux){
-      //     d_min_aux = d_error[i];
-      //     i_min_aux = i;
-      //   }
-      // }
-      // vec_d_errors_.push_back(d_min_aux);
-      // vec_d_person_.push_back(d_person_single[i_min_aux]);
-      // vec_i_zone_.push_back(exception_happended);
-      vec_d_person_.push_back(d_person_single[2]);
-      vec_d_x_.push_back(vec4(t)[1]);
-      vec_d_y_.push_back(vec4(t)[2]);
-      vec_d_z_.push_back(vec4(t)[3]);
+  // THIS PART OF THE CODE RESPONSIBLE FOR LOGGING DATA WILL BE COMMENTED
+  // FOR LOGGING PURPOSES
+  // if((log_data_ == 1) && (counter_% 100 == 0)){
+  //     vec_d_person_.push_back(d_person_single[2]);
+  //     vec_d_x_.push_back(vec4(t)[1]);
+  //     vec_d_y_.push_back(vec4(t)[2]);
+  //     vec_d_z_.push_back(vec4(t)[3]);
 
-      vec_head_x_.push_back(pose_human_single(2,0));
-      vec_head_y_.push_back(pose_human_single(2,1));
-      vec_head_z_.push_back(pose_human_single(2,2));
-      // vec_vel_joint1_.push_back(dq_filtered_[1]);
-      vec_timestamps_.push_back(time_now-time_log_);
-
-      ROS_INFO_STREAM(" O VALOR DA DIST EHH     " << d_person_single[2] << "\n\n");
-  }
+  //     vec_head_x_.push_back(pose_human_single(2,0));
+  //     vec_head_y_.push_back(pose_human_single(2,1));
+  //     vec_head_z_.push_back(pose_human_single(2,2));
+  //     // vec_vel_joint1_.push_back(dq_filtered_[1]);
+  //     vec_timestamps_.push_back(time_now-time_log_);
+  // }
 
   // Check the error
   VectorXd e = vec4(t - td_);
   if(e.norm() < 0.03){
-
     
     if(log_data_ == 0 && decide_td_ == 0){
-      ROS_INFO_STREAM(" FICOU DIFERENTEEEEEE \n\n");
       time_log_ = time_now;
       log_data_ = 1;
     }
     else if(log_data_ == 1 && decide_td_ == 1){
       log_data_ = 0;
     }
-
+    // Changing the desired position of the manipulator
     if(decide_td_ == 0){
       td_ = td2_;
-      // td_ = td1_;
       decide_td_ = 1;
     }
     else{
@@ -736,163 +460,135 @@ void JointVelocitySide2SideController::update(const ros::Time& /* time */,
 
   for(i=0;i<n_space;i++){
     velocity_joint_handles_[i].setCommand(dq_filtered_[i]);
-  }
-
-  // for (auto joint_handle : velocity_joint_handles_) {
-  //   // joint_handle.setCommand(omega);
-  //   joint_handle.setCommand(vel);
-  // }
-  // if((counter_%2000) -1 == 0){
-  //   ROS_INFO_STREAM(" AQUIIII    10    ");
-  //   ROS_INFO_STREAM(" Valor de t eh    " << t);
-  //   ROS_INFO_STREAM(" Valor de r do robo eh   " << rotation(x));
-  //   ROS_INFO_STREAM(" Valor de r da camera eh " << rotation(pose_camera_));
-  // }
-
-  // time_now = ros::Time::now().toSec()*1000;
-  // time_diff = time_now - time_prev;
-  // if(counter_%2000 == 0){
-  //   std::cout << "  \n" << time_diff << "      " << time_now << "   \n";
-  // }  
-                 
+  }              
 }
 
 void JointVelocitySide2SideController::stopping(const ros::Time& /*time*/) {
   // WARNING: DO NOT SEND ZERO VELOCITIES HERE AS IN CASE OF ABORTING DURING MOTION
   // A JUMP TO ZERO WILL BE COMMANDED PUTTING HIGH LOADS ON THE ROBOT. LET THE DEFAULT
   // BUILT-IN STOPPING BEHAVIOR SLOW DOWN THE ROBOT.
-  ROS_INFO_STREAM(" HEREEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE"); 
-  ROS_INFO_STREAM("O SIZE DO LOG DATA EH   " << vec_d_errors_.size() << "\n\n");
 
-    // Create and open a text file
-    std::ofstream myfile;
-    myfile.open("/home/geriatronics/victor/Log_Data/example.txt");
+    // ----- THIS PART OF THE CODE RESPONSIBLE FOR LOGGING WILL BE COMMENTED TO AVOID MISTAKES
+    // ----- BUT IF NEEDED, YOU CAN LOG DATA USING THE PIECE OF CODE BELOW
+  
+    // // PASSING THE LOGGED INFORMATION TO A TXT FILE  
+    // // Create and open a text file
+    // std::ofstream myfile;
+    // myfile.open("/home/geriatronics/victor/Log_Data/example.txt");
 
-    // Write to the file
-    int i;
+    // // Write to the file
+    // int i;
 
-    for(i=0; i<vec_timestamps_.size();i++){
-      myfile << vec_timestamps_[i] << "," ;
-    }
+    // for(i=0; i<vec_timestamps_.size();i++){
+    //   myfile << vec_timestamps_[i] << "," ;
+    // }
+
+    // // myfile << std::endl;
+
+    // // for(i=0; i<vec_timestamps_.size();i++){
+    // //   myfile << vec_d_errors_[i] << ",";
+    // // }
 
     // myfile << std::endl;
 
     // for(i=0; i<vec_timestamps_.size();i++){
-    //   myfile << vec_d_errors_[i] << ",";
+    //   myfile << vec_d_person_[i] << ",";
     // }
 
-    myfile << std::endl;
+    // // myfile << std::endl;
 
-    for(i=0; i<vec_timestamps_.size();i++){
-      myfile << vec_d_person_[i] << ",";
-    }
+    // // for(i=0; i<vec_timestamps_.size();i++){
+    // //   myfile << vec_d_person2_[i] << ",";
+    // // }
+
+    // // myfile << std::endl;
+
+    // // for(i=0; i<vec_timestamps_.size();i++){
+    // //   myfile << vec_d_person3_[i] << ",";
+    // // }
+
+    // // myfile << std::endl;
+
+    // // for(i=0; i<vec_timestamps_.size();i++){
+    // //   myfile << vec_d_person4_[i] << ",";
+    // // }
+
+    // // myfile << std::endl;
+
+    // // for(i=0; i<vec_timestamps_.size();i++){
+    // //   myfile << vec_vel_joint1_[i] << ",";
+    // // }
+
+    // // myfile << std::endl;
+
+    // // for(i=0; i<vec_timestamps_.size();i++){
+    // //   myfile << vec_i_zone_[i] << ",";
+    // // }
+
+    // // myfile << std::endl;
+
+    // // for(i=0; i<vec_timestamps_.size();i++){
+    // //   myfile << vec_d_arms_[i] << ",";
+    // // }
+
+    // // myfile << std::endl;
+
+    // // for(i=0; i<vec_timestamps_.size();i++){
+    // //   myfile << vec_d_torso_[i] << ",";
+    // // }
+
+    // // myfile << std::endl;
+
+    // // for(i=0; i<vec_timestamps_.size();i++){
+    // //   myfile << vec_d_head_[i] << ",";
+    // // }
 
     // myfile << std::endl;
 
     // for(i=0; i<vec_timestamps_.size();i++){
-    //   myfile << vec_d_person2_[i] << ",";
+    //   myfile << vec_d_x_[i] << ",";
+    // }
+    // myfile << std::endl;
+
+    // for(i=0; i<vec_timestamps_.size();i++){
+    //   myfile << vec_d_y_[i] << ",";
     // }
 
     // myfile << std::endl;
 
     // for(i=0; i<vec_timestamps_.size();i++){
-    //   myfile << vec_d_person3_[i] << ",";
+    //   myfile << vec_d_z_[i] << ",";
+    // }
+
+    //     myfile << std::endl;
+
+    // for(i=0; i<vec_timestamps_.size();i++){
+    //   myfile << vec_head_x_[i] << ",";
+    // }
+
+    //     myfile << std::endl;
+
+    // for(i=0; i<vec_timestamps_.size();i++){
+    //   myfile << vec_head_y_[i] << ",";
     // }
 
     // myfile << std::endl;
 
     // for(i=0; i<vec_timestamps_.size();i++){
-    //   myfile << vec_d_person4_[i] << ",";
+    //   myfile << vec_head_z_[i] << ",";
     // }
 
-    // myfile << std::endl;
-
-    // for(i=0; i<vec_timestamps_.size();i++){
-    //   myfile << vec_vel_joint1_[i] << ",";
-    // }
-
-    // myfile << std::endl;
-
-    // for(i=0; i<vec_timestamps_.size();i++){
-    //   myfile << vec_i_zone_[i] << ",";
-    // }
-
-    // myfile << std::endl;
-
-    // for(i=0; i<vec_timestamps_.size();i++){
-    //   myfile << vec_d_arms_[i] << ",";
-    // }
-
-    // myfile << std::endl;
-
-    // for(i=0; i<vec_timestamps_.size();i++){
-    //   myfile << vec_d_torso_[i] << ",";
-    // }
-
-    // myfile << std::endl;
-
-    // for(i=0; i<vec_timestamps_.size();i++){
-    //   myfile << vec_d_head_[i] << ",";
-    // }
-
-    myfile << std::endl;
-
-    for(i=0; i<vec_timestamps_.size();i++){
-      myfile << vec_d_x_[i] << ",";
-    }
-
-        myfile << std::endl;
-
-    for(i=0; i<vec_timestamps_.size();i++){
-      myfile << vec_d_y_[i] << ",";
-    }
-
-    myfile << std::endl;
-
-    for(i=0; i<vec_timestamps_.size();i++){
-      myfile << vec_d_z_[i] << ",";
-    }
-
-        myfile << std::endl;
-
-    for(i=0; i<vec_timestamps_.size();i++){
-      myfile << vec_head_x_[i] << ",";
-    }
-
-        myfile << std::endl;
-
-    for(i=0; i<vec_timestamps_.size();i++){
-      myfile << vec_head_y_[i] << ",";
-    }
-
-    myfile << std::endl;
-
-    for(i=0; i<vec_timestamps_.size();i++){
-      myfile << vec_head_z_[i] << ",";
-    }
-
-
-
-
-
-    
-    // Close the file
-    myfile.close();
+    // // Close the file
+    // myfile.close();
 }
 
 void JointVelocitySide2SideController::cb_update_hmp(const std_msgs::String::ConstPtr& msg){
-    // ROS_INFO("I heard: [%s]", msg->data.c_str());
     str_poses_human_ = msg->data.c_str();
     refresh_pose_ = 1;
-    
-    // std::cout << "The size is   " << str_poses_human.length()  << std::endl;
-    // std::cout << str_poses_human.substr(0,100) << std::endl;
 }
 
 void JointVelocitySide2SideController::cb_stop_robot(const std_msgs::Int32::ConstPtr& msg){
-    // ROS_INFO("I heard: [%s]", msg->data.c_str());
     stop_robot_ = int(msg->data);
-    std::cout << stop_robot_ << std::endl;
 }
 
 }  // namespace franka_example_controllers
