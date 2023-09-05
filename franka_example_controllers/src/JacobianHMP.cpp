@@ -41,15 +41,10 @@ JacobianHMP::JacobianHMP(const VectorXd &d_safe, double K_error_value){
         d_safe_torso = d_safe[1];
         d_safe_head = d_safe[2];
     }
-
     K_error = K_error_value;
 }
-// I should  actually delete it!!!
-void JacobianHMP::add_counter(int value){
-    counter = counter + value;
-}
 
-// This function should not be here (there is not relation with the jacobian)
+// This function should not be here (there is not relation with the jacobian). I put it here just to facilitate my life
 // Later should put this function somewhere else
 std::tuple<MatrixXd, VectorXd> JacobianHMP::transform_camera_points_2matrix(std::string& str_numbers, DQ& pose_camera){
 
@@ -87,9 +82,6 @@ std::tuple<MatrixXd, VectorXd> JacobianHMP::transform_camera_points_2matrix(std:
         double max_log_sigma = log_sigma.maxCoeff();
         deviation_joints[i] = std::exp(max_log_sigma);
     }
-    // if((counter/1000)%2 == 0){
-    //     std::cout << deviation_joints << std::endl;
-    // }
     return std::make_tuple(points_human, deviation_joints);
 }
 
@@ -104,15 +96,12 @@ VectorXd JacobianHMP::change_ref_to_lab(VectorXd& point_ref, DQ& pose_ref){
     return point_lab;
 }
 
-// std::tuple<MatrixXd, VectorXd> 
 std::tuple<MatrixXd, VectorXd, VectorXd> JacobianHMP::get_jacobian_human(const DQ_SerialManipulatorMDH& franka, const MatrixXd &Jt,const DQ &t,const MatrixXd &points_human, const VectorXd &deviation_joints){
 
     int total_pose;
     int num_points_human = points_human.rows();
     // n_dim should be equal to 3
     int n_dim = points_human.cols();
-
-    // std::cout << "n_dim    eh   " << n_dim << std::endl;
 
     counter = counter + 1;
 
@@ -122,18 +111,12 @@ std::tuple<MatrixXd, VectorXd, VectorXd> JacobianHMP::get_jacobian_human(const D
     else{
         total_pose = int(num_points_human/num_joints_per_pose);
     }
-
-    // TODO: I NEED TO PASS ALL THE HUMAN_POINTS TO DQ FORM
-    // ACTUALLY, I DONT NEED (just turn to DQ whenever necessary)
-    // But I still need to think on how I am going to do that
-
+    
     double d_min = 1e6;
     int i_min = -1;
     DQ point;
     int i;
-
-    // std::cout << "HMP   AQUI 0  " << std::endl;
-
+    
     for(i=0; i <num_points_human; i++){
         
         point = DQ(points_human.row(i));
@@ -165,9 +148,7 @@ std::tuple<MatrixXd, VectorXd, VectorXd> JacobianHMP::get_3jacobians_human(const
     int num_points_human = points_human.rows();
     // n_dim should be equal to 3
     int n_dim = points_human.cols();
-
-    // std::cout << "n_dim    eh   " << n_dim << std::endl;
-
+    
     counter = counter + 1;
 
     if(num_points_human%num_joints_per_pose != 0){
@@ -177,16 +158,10 @@ std::tuple<MatrixXd, VectorXd, VectorXd> JacobianHMP::get_3jacobians_human(const
         total_pose = int(num_points_human/num_joints_per_pose);
     }
 
-    // TODO: I NEED TO PASS ALL THE HUMAN_POINTS TO DQ FORM
-    // ACTUALLY, I DONT NEED (just turn to DQ whenever necessary)
-    // But I still need to think on how I am going to do that
-
     double d_min_arm = 1e6, d_min_torso = 1e6, d_min_head = 1e6;
     int i_min_arm = -1, i_min_torso = -1, i_min_head = -1;
     DQ point;
     int i;
-
-    // std::cout << "HMP   AQUI 0  " << std::endl;
 
     for(i=0; i <num_points_human; i++){
         
@@ -221,8 +196,7 @@ std::tuple<MatrixXd, VectorXd, VectorXd> JacobianHMP::get_3jacobians_human(const
     }
 
     int i_min[3] = {i_min_arm, i_min_torso, i_min_head};
-    
-    // int dim_space = franka.get_dim_configuration_space();
+
     int dim_space = Jt.cols();
     MatrixXd Jacobian(3,dim_space);
     VectorXd d_error(3);
@@ -248,7 +222,6 @@ std::tuple<MatrixXd, VectorXd, VectorXd> JacobianHMP::choose_Jacobian(const DQ_S
     int pose_min = int(i_min/num_joints_per_pose);
 
     // n_dim should be equal to 3
-    // Or I could just use num_dim
     int n_dim = points_human.cols();
 
     // Now we already have the closest point
@@ -319,29 +292,24 @@ std::tuple<MatrixXd, VectorXd, VectorXd> JacobianHMP::choose_Jacobian(const DQ_S
 
         d_safe = d_safe_torso;
     }
-
     d_safe  = d_safe + K_error*deviation_joints[i_min];
-    
-    // std::cout << "HMP   AQUI 0.5  " << std::endl;
-
+  
     VectorXd point_closer = points_human.row(i_min);
     double dist_min = double(norm(t - DQ(point_closer)));   
 
-    // For printing and debug purposes  
-    if(counter%2000 == 0){
-        // std::cout << point_closer << std::endl;
-        // std::cout << i_min << std::endl;
-        std::cout << " O ponto mais proximo eh   " << p_min << std::endl;
-        std::cout << "Dist min eh    " << dist_min << std::endl;
-    }
-
+    // // For printing and debug purposes  
+    // if(counter%2000 == 0){
+    //     // std::cout << point_closer << std::endl;
+    //     // std::cout << i_min << std::endl;
+    //     std::cout << " The closest point is   " << p_min << std::endl;
+    //     std::cout << " The min distance is   " << dist_min << std::endl;
+    // }
+    
     int decide_plane;
     DQ plane;
     int decide_line, decide_line1, decide_line2;
     DQ line, line1, line2;
     double dist_t_line, dist_t_line1, dist_t_line2;
-
-    // std::cout << "HMP    AQUI 1  " << std::endl;
 
     if(check_plane == 1){
         std::tie(decide_plane, plane) = check_get_plane(points_plane, t);
@@ -353,24 +321,21 @@ std::tuple<MatrixXd, VectorXd, VectorXd> JacobianHMP::choose_Jacobian(const DQ_S
             double d_p_plane = double(dot(t,n_plane)-d_plane);
             double d_error_plane = d_p_plane - d_safe;
 
-            // AQUII VOLTAR AQUI DPS
             VectorXd d_error(1);
             d_error << d_error_plane;
             MatrixXd jacobian = franka.point_to_plane_distance_jacobian(Jt, t, plane);
 
-            //CREATING THIS NEW VARIAVLE
+            // Getting the dist to the person
             VectorXd d_person(1);
             d_person << d_p_plane;
         
-            // AQUII DELETE LATER
+            // PRINTING AND DEBUG PURPOSES
             if(counter%2000 == 0){
             std::cout << "PLANE" << std::endl;
             }
             return std::make_tuple(jacobian, d_error, d_person);     
         }
     }
-    
-    // std::cout << "HMP   AQUI 2  " << std::endl;
 
     if(check_line == 1){
         std::tie(decide_line, line, dist_t_line) = check_get_line(points_line, t);
@@ -388,11 +353,11 @@ std::tuple<MatrixXd, VectorXd, VectorXd> JacobianHMP::choose_Jacobian(const DQ_S
             VectorXd d_error(1);
             d_error << d_error_line;
 
-            //CREATING THIS NEW VARIAVLE
+            // Getting the dist to the person
             VectorXd d_person(1);
             d_person << d_p_line;
 
-            // AQUII DELETE LATER
+            // PRINTING AND DEBUG PURPOSES
             if(counter%2000 == 0){
             std::cout << "LINE - 1 AVAILABLE" << std::endl;
             }
@@ -442,11 +407,11 @@ std::tuple<MatrixXd, VectorXd, VectorXd> JacobianHMP::choose_Jacobian(const DQ_S
             VectorXd d_error(1);
             d_error << d_error_line;
 
-            //CREATING THIS NEW VARIAVLE
+            // Getting the dist to the person
             VectorXd d_person(1);
             d_person << d_p_line;
 
-            // AQUII DELETE LATER
+            // PRINTING AND DEBUG PURPOSES
             if(counter%2000 == 0){
             std::cout << "LINE - 2 AVAILABLE" << std::endl;
             }
@@ -454,7 +419,6 @@ std::tuple<MatrixXd, VectorXd, VectorXd> JacobianHMP::choose_Jacobian(const DQ_S
             return std::make_tuple(jacobian, d_error, d_person);
         }
     }
-    // std::cout << "HMP  AQUI 3  " << std::endl;
 
     // If the code reaches here, then we have the only the point to take in account
     // Use only the point if the others are not correct, and to that we calculate the jacobian        
@@ -467,11 +431,11 @@ std::tuple<MatrixXd, VectorXd, VectorXd> JacobianHMP::choose_Jacobian(const DQ_S
     VectorXd d_error(1);
     d_error << d_error_p;
 
-    //CREATING THIS NEW VARIAVLE
+    // Getting the dist to the person
     VectorXd d_person(1);
     d_person << d_p_p;
 
-    // AQUII DELETE LATER
+    // PRINTING AND DEBUG PURPOSES
     if(counter%2000 == 0){
         std::cout << "  POINT  " << std::endl;
     }
