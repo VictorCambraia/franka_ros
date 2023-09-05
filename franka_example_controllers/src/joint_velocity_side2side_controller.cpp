@@ -124,13 +124,8 @@ bool JointVelocitySide2SideController::init(hardware_interface::RobotHW* robot_h
 
   accel_minus_ = VectorXd(7);
   accel_plus_ = VectorXd(7);
-  // accel_minus_ << -2.1750, -2.1750, -2.1750, -2.1750, -2.6100, -2.6100, -2.6100;
-  // accel_plus_ << 2.1750, 2.1750, 2.1750, 2.1750, 2.6100, 2.6100, 2.6100;
-
   accel_minus_ << -15, -7.5, -10, -12.5, -15, -20, -20;
   accel_plus_ << 15, 7.5, 10, 12.5, 15, 20, 20;
-  // accel_minus_ = -VectorXd::Ones(7);
-  // accel_plus_ = VectorXd::Ones(7);
 
   // Define the floor
   n_floor_ = 1*k_;
