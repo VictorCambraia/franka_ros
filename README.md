@@ -5,11 +5,14 @@
 
 See the [Franka Control Interface (FCI) documentation][fci-docs] for more information.
 
-# TODO
+# Code developed by me
 
-- Get the exception of the y.... in the get_pose_refactor.py (DONE, I THINK)
-- Change the d_safe so it includes the std deviation as well. I am not considering it to the final calculation right now...
-- See if the model that I am using right now is more or less trustworthy... Maybe not
+I added one controller to this repo. The controller responsible for collision avoidance to a person using the VFI approach. The last version of the controller is in this repo and not in the  "ROS_HMP_Collision_Avoidance " repo.
+
+The controller is the code joint_velocity_side2side_controller.cpp and is in the folder franka_example_controllers/src . The name is not self descriptive because initially this controller had another function. The structure of this controller is similar to the other example controllers.
+
+In addition to the joint_velocity_side2side_controller.cpp, it is presented in the franka_example_controllers/src folder the JacobianHMP.cpp file. This document has functions that are necessary to the developed controller (most of the functions are related to the Jacobians calculation)
+
 
 ## License
 
